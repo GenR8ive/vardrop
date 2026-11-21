@@ -1,0 +1,9 @@
+﻿cargo :     Checking registry-core v0.1.0 (D:\Workspace\Rust\variable-manager\crates\registry-core)
+At line:1 char:1
++ cargo check 2>&1 | Out-File -Encoding utf8 chk_server.log; Select-Str ...
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking re...\registry-core):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Checking registry-server v0.1.0 (D:\Workspace\Rust\variable-manager\crates\registry-server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 23.44s
