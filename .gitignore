@@ -1,0 +1,33 @@
+# derleme
+/target/
+**/target/
+
+# node
+**/node_modules/
+
+# panel çıktısı (release/Docker yeniden üretir)
+apps/admin-web/dist/
+
+# çalışma zamanı — asla commit etmeyin
+/data/
+config.toml
+*.db
+*.db-wal
+*.db-shm
+master.key
+initial-admin-password.txt
+
+# gizliler
+.env
+.env.*
+*.pem
+*.key
+!config.example.toml
+!config.host.example.toml
+
+# tauri üretimi
+apps/client/src-tauri/gen/
+
+# os
+.DS_Store
+Thumbs.db
