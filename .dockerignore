@@ -1,0 +1,12 @@
+target
+**/target
+**/node_modules
+apps/admin-web/dist
+data
+config.toml
+.git
+**/*.db
+**/*.db-wal
+**/*.db-shm
+master.key
+apps/client/src-tauri/target

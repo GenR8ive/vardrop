@@ -1,0 +1,21 @@
+# /etc/vardrop/config.toml olarak kopyalayın.
+# Yollar mutlak. Kullanıcı ve dizinler: docs/SELF-HOST.md
+
+[server]
+bind       = "127.0.0.1:8080"
+public_url = "https://vars.example.com"
+cors_allow_all = false
+
+[data]
+database = "/var/lib/vardrop/registry.db"
+storage  = "/var/lib/vardrop/storage"
+
+[security]
+master_key_file        = "/var/lib/vardrop/master.key"
+secret_max_inline_kb   = 16
+password_min_len       = 10
+session_ttl_hours      = 12
+token_default_ttl_days = 90
+
+[panel]
+dist = "/opt/vardrop/panel"

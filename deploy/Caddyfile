@@ -1,0 +1,6 @@
+# systemd kurulumu: vardrop-server 127.0.0.1:8080 dinler.
+# Alan adını değiştirin. Caddy sertifikayı Let's Encrypt ile alır.
+
+vars.example.com {
+	reverse_proxy 127.0.0.1:8080
+}

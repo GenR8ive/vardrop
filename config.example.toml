@@ -1,0 +1,24 @@
+# Geliştirme şablonu. Kopyalayıp "config.toml" olarak kullanın.
+# Self-host için config.host.example.toml ve docs/SELF-HOST.md.
+# Kod varsayılanı (dosya yoksa) cors_allow_all = false.
+
+[server]
+bind       = "127.0.0.1:8080"   # LAN'a açmak için "0.0.0.0:8080"; TLS için ters proxy (Caddy/Nginx) şart
+public_url = "http://127.0.0.1:8080"
+# geliştirme sırasında panel ayrı portta (vite) çalışıyorsa CORS açın. Prod'da false.
+cors_allow_all = true
+
+[data]
+database = "data/registry.db"
+storage  = "data/storage"
+
+[security]
+master_key_file       = "data/master.key"
+secret_max_inline_kb  = 16
+password_min_len      = 10
+session_ttl_hours     = 12
+token_default_ttl_days = 90
+
+[panel]
+# panel (Vite build çıktısı) klasörü; repo kökünden göreceli. Yoksa API-only çalışır.
+dist = "apps/admin-web/dist"

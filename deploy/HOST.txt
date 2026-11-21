@@ -1,0 +1,21 @@
+Vardrop — sunucu paketi
+================================
+
+Bu arşiv vardrop-server ikilisini ve yönetim panelini içerir.
+İstemci (Vardrop) ayrıdır; GitHub Releases'tan platformunuza göre indirin.
+
+1. Bu klasörde (Windows: vardrop-server.exe):
+     ./vardrop-server init
+   İlk admin şifresi bir kez basılır. Kaydedin.
+2. Sonra, aynı klasörden:
+     ./vardrop-server serve
+   Panel: http://127.0.0.1:8080
+3. İnternete açmadan önce TLS koyun (Caddy/Nginx). config.toml içinde
+   public_url = "https://..." ve cors_allow_all = false kalsın.
+4. Yedekleyin, üçüncüsü yok:
+     data/master.key
+     data/registry.db
+     data/storage/
+   master.key kaybı = şifreli secret'lar çözülemez.
+
+Ayrıntı: depodaki docs/SELF-HOST.md

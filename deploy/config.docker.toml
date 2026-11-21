@@ -1,0 +1,21 @@
+# İmajın içindeki varsayılan. Volume: /data. PUBLIC_URL ve BIND ortam
+# değişkenleri entrypoint tarafından bu dosyanın kopyasına yazılır.
+
+[server]
+bind       = "0.0.0.0:8080"
+public_url = "http://127.0.0.1:8080"
+cors_allow_all = false
+
+[data]
+database = "/data/registry.db"
+storage  = "/data/storage"
+
+[security]
+master_key_file        = "/data/master.key"
+secret_max_inline_kb   = 16
+password_min_len       = 10
+session_ttl_hours      = 12
+token_default_ttl_days = 90
+
+[panel]
+dist = "/app/panel"

@@ -1,0 +1,38 @@
+# Self-host. İlk açılışta admin şifresi volume içine yazılır:
+#   docker compose exec registry cat /data/initial-admin-password.txt
+# Okuyup silin. TLS için: docker compose --profile tls up -d
+# ve deploy/Caddyfile.docker + DOMAIN.
+
+services:
+  registry:
+    image: vardrop:local
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      ADMIN_USER: admin
+      # PUBLIC_URL: https://vars.example.com
+    volumes:
+      - vardrop-data:/data
+
+  caddy:
+    image: caddy:2
+    profiles: ["tls"]
+    restart: unless-stopped
+    depends_on:
+      - registry
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: vars.example.com
+    volumes:
+      - ./deploy/Caddyfile.docker:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  vardrop-data:
+  caddy-data:
+  caddy-config:

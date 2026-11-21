@@ -1,0 +1,6 @@
+# docker compose --profile tls
+# DOMAIN ortam değişkeni compose dosyasında.
+
+{$DOMAIN:vars.example.com} {
+	reverse_proxy registry:8080
+}

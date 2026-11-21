@@ -1,0 +1,22 @@
+# Self-host / release arşivi. Yollar çalışma dizinine göredir.
+# systemd mutlak yol ister: deploy/config.systemd.example.toml
+# Ayrıntı: docs/SELF-HOST.md
+
+[server]
+bind       = "127.0.0.1:8080"   # ters proxy arkasında. Doğrudan LAN: "0.0.0.0:8080" + TLS
+public_url = "https://vars.example.com"
+cors_allow_all = false
+
+[data]
+database = "data/registry.db"
+storage  = "data/storage"
+
+[security]
+master_key_file        = "data/master.key"
+secret_max_inline_kb   = 16
+password_min_len       = 10
+session_ttl_hours      = 12
+token_default_ttl_days = 90
+
+[panel]
+dist = "panel"
