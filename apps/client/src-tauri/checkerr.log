@@ -1,0 +1,76 @@
+﻿cargo :     Checking variable-filler v0.1.0 (D:\Workspace\Rust\variable-manager\apps\client\src-tauri)
+At line:1 char:1
++ cargo check 2>&1 | Out-File -Encoding utf8 checkerr.log; Select-Strin ...
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking va...ient\src-tauri):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: unused import: `tauri_plugin_global_shortcut::GlobalShortcutExt`
+ --> src\main.rs:9:5
+  |
+9 | use tauri_plugin_global_shortcut::GlobalShortcutExt;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0308]: mismatched types
+    --> src\main.rs:89:43
+     |
+  89 |     let size = win.outer_size().unwrap_or(PhysicalPosition::new(520, 440));
+     |                                 --------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `PhysicalSize<u32>`, found `P
+hysicalPosition<{integer}>`
+     |                                 |
+     |                                 arguments to this method are incorrect
+     |
+     = note: expected struct `PhysicalSize<u32>`
+                found struct `PhysicalPosition<{integer}>`
+help: the return type of this call is `PhysicalPosition<{integer}>` due to the type of the argument passed
+    --> src\main.rs:89:16
+     |
+  89 |     let size = win.outer_size().unwrap_or(PhysicalPosition::new(520, 440));
+     |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^-------------------------------^
+     |                                           |
+     |                                           this argument influences the return type of `unwrap_or`
+note: method defined here
+    --> C:\Users\tscbu\.rustup\toolchains\stable-x86_64-pc-windows-msvc\lib/rustlib/src/rust\library\core\src\result.rs
+:1590:18
+     |
+1590 |     pub const fn unwrap_or(self, default: T) -> T
+     |                  ^^^^^^^^^
+
+error[E0609]: no field `x` on type `PhysicalSize<u32>`
+  --> src\main.rs:97:21
+   |
+97 |         if x + size.x as f64 > mon_x + mon_w {
+   |                     ^ unknown field
+   |
+   = note: available fields are: `width`, `height`
+
+error[E0609]: no field `x` on type `PhysicalSize<u32>`
+  --> src\main.rs:98:37
+   |
+98 |             x = pos.x - 16.0 - size.x as f64;
+   |                                     ^ unknown field
+   |
+   = note: available fields are: `width`, `height`
+
+error[E0609]: no field `y` on type `PhysicalSize<u32>`
+   --> src\main.rs:100:21
+    |
+100 |         if y + size.y as f64 > mon_y + mon_h {
+    |                     ^ unknown field
+    |
+    = note: available fields are: `width`, `height`
+
+error[E0609]: no field `y` on type `PhysicalSize<u32>`
+   --> src\main.rs:101:37
+    |
+101 |             y = pos.y - 16.0 - size.y as f64;
+    |                                     ^ unknown field
+    |
+    = note: available fields are: `width`, `height`
+
+Some errors have detailed explanations: E0308, E0609.
+For more information about an error, try `rustc --explain E0308`.
+warning: `variable-filler` (bin "variable-filler") generated 1 warning
+error: could not compile `variable-filler` (bin "variable-filler") due to 5 previous errors; 1 warning emitted

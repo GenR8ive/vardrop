@@ -1,0 +1,289 @@
+//! Vardrop — Tauri 2 istemcisi.
+//! Ctrl+Alt+V global kısayolu imleç yanında şeffaf arama penceresini açar/kapatır.
+//! HTTP istekleri JS tarafındaki fetch ile gider; Rust tarafı ayar dosyası,
+//! pencere yönetimi ve kopyalama (arboard) sağlar.
+//!
+//! Bağlantı bilgisi OS anahtarlığında değil, kullanıcıya özel bir dosyada durur
+//! (kurumsal WDAC/Credential Manager sapması). Ayrıntı: SECURITY.md.
+
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use std::{fs, path::PathBuf};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+
+/// Kullanıcıya özel ayar dizini. Windows'ta Roaming değil Local — PAT dosya
+/// sunucusuna replike olmasın. Eski `variable-filler` yolu okunursa taşınır.
+fn data_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        let base = std::env::var("LOCALAPPDATA")
+            .or_else(|_| std::env::var("APPDATA"))
+            .ok()?;
+        return Some(PathBuf::from(base).join("vardrop"));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").ok()?;
+        return Some(PathBuf::from(home).join("Library/Application Support/vardrop"));
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+            if !xdg.is_empty() {
+                return Some(PathBuf::from(xdg).join("vardrop"));
+            }
+        }
+        let home = std::env::var("HOME").ok()?;
+        Some(PathBuf::from(home).join(".config/vardrop"))
+    }
+}
+
+/// Eski isimle (`variable-filler`) kurulu dizinler. v0.1 Roaming'e yazdı,
+/// sonra Local'e taşındı; ikisi de yenisine kopyalanır.
+fn legacy_data_dirs() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    #[cfg(windows)]
+    {
+        if let Ok(base) = std::env::var("LOCALAPPDATA") {
+            out.push(PathBuf::from(base).join("variable-filler"));
+        }
+    }
+    if let Ok(base) = std::env::var("APPDATA") {
+        let roaming = PathBuf::from(base).join("variable-filler");
+        if !out.contains(&roaming) {
+            out.push(roaming);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            out.push(PathBuf::from(home).join("Library/Application Support/variable-filler"));
+        }
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+            if !xdg.is_empty() {
+                out.push(PathBuf::from(xdg).join("variable-filler"));
+            }
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            out.push(PathBuf::from(home).join(".config/variable-filler"));
+        }
+    }
+    let current = data_dir();
+    out.retain(|p| Some(p) != current.as_ref());
+    out
+}
+
+fn restrict_dir(p: &PathBuf) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o700));
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = p;
+    }
+}
+
+fn restrict_file(p: &PathBuf) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(p, fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = p;
+    }
+}
+
+fn migrate_legacy() {
+    let Some(dir) = data_dir() else {
+        return;
+    };
+    if legacy_data_dirs().iter().all(|legacy| !legacy.is_dir()) {
+        return;
+    }
+    let _ = fs::create_dir_all(&dir);
+    restrict_dir(&dir);
+    for legacy in legacy_data_dirs() {
+        if !legacy.is_dir() {
+            continue;
+        }
+        for name in ["server.txt", "token.txt"] {
+            let src = legacy.join(name);
+            let dst = dir.join(name);
+            if dst.exists() || !src.is_file() {
+                continue;
+            }
+            if fs::copy(&src, &dst).is_ok() {
+                restrict_file(&dst);
+                let _ = fs::remove_file(&src);
+            }
+        }
+    }
+}
+
+fn read_file(p: &PathBuf) -> Option<String> {
+    fs::read_to_string(p)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn write_file(p: &PathBuf, value: &str) -> Result<(), String> {
+    fs::write(p, value).map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+struct Settings {
+    server: Option<String>,
+    token: Option<String>,
+    has_token: bool,
+    shortcut: String,
+}
+
+#[tauri::command]
+fn get_settings() -> Settings {
+    migrate_legacy();
+    let dir = data_dir();
+    let server = dir.as_ref().and_then(|d| read_file(&d.join("server.txt")));
+    let token = dir.as_ref().and_then(|d| read_file(&d.join("token.txt")));
+    Settings {
+        server,
+        has_token: token.as_ref().map(|t| !t.is_empty()).unwrap_or(false),
+        token,
+        shortcut: "Ctrl+Alt+V".into(),
+    }
+}
+
+#[tauri::command]
+fn save_settings(server: String, token: String) -> Result<(), String> {
+    migrate_legacy();
+    let dir = data_dir().ok_or_else(|| "ayar klasörü bulunamadı (HOME/LOCALAPPDATA)".to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    restrict_dir(&dir);
+    let server_path = dir.join("server.txt");
+    write_file(&server_path, server.trim())?;
+    restrict_file(&server_path);
+
+    let tok = token.trim();
+    let token_path = dir.join("token.txt");
+    if tok.is_empty() {
+        let _ = fs::remove_file(&token_path);
+    } else {
+        write_file(&token_path, tok)?;
+        restrict_file(&token_path);
+    }
+    Ok(())
+}
+
+/// Sunucu adresi ve PAT dosyalarını siler (bu makinedeki bağlantı kaydı).
+#[tauri::command]
+fn clear_settings() -> Result<(), String> {
+    let mut dirs = Vec::new();
+    if let Some(d) = data_dir() {
+        dirs.push(d);
+    }
+    dirs.extend(legacy_data_dirs());
+    for dir in dirs {
+        for name in ["server.txt", "token.txt"] {
+            let p = dir.join(name);
+            if p.exists() {
+                fs::remove_file(&p).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Seçili değeri panoya kopyalar (JS navigator.clipboard'dan sonra yedek yol).
+#[tauri::command]
+fn copy_text(text: String) -> Result<(), String> {
+    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    cb.set_text(text).map_err(|e| e.to_string())
+}
+
+/// Tarayıcıda URL açar (opener JS API'si başarısız olursa yedek yol).
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn hide_popup(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("search") {
+        let _ = win.hide();
+    }
+}
+
+/// Popup açıkken kapat, kapalıyken imlecin yanına getirip göster (toggle).
+fn toggle_popup(app: &AppHandle) {
+    let Some(win) = app.get_webview_window("search") else {
+        return;
+    };
+    if win.is_visible().unwrap_or(false) {
+        let _ = win.hide();
+        return;
+    }
+    place_near_cursor(&win);
+    let _ = win.show();
+    let _ = win.set_focus();
+}
+
+/// İmlecin hemen yanına koyar; ekran sağ/dibi taşarsa içeri alır.
+fn place_near_cursor(win: &WebviewWindow) {
+    let app = win.app_handle();
+    let Ok(pos) = app.cursor_position() else {
+        return;
+    };
+    let size = win
+        .outer_size()
+        .unwrap_or_else(|_| PhysicalSize::new(520, 440));
+    let mut x = pos.x + 16.0;
+    let mut y = pos.y + 16.0;
+    if let Ok(Some(mon)) = win.current_monitor() {
+        let mon_x = mon.position().x as f64;
+        let mon_y = mon.position().y as f64;
+        let mon_w = mon.size().width as f64;
+        let mon_h = mon.size().height as f64;
+        if x + size.width as f64 > mon_x + mon_w {
+            x = pos.x - 16.0 - size.width as f64;
+        }
+        if y + size.height as f64 > mon_y + mon_h {
+            y = pos.y - 16.0 - size.height as f64;
+        }
+        x = x.max(mon_x);
+        y = y.max(mon_y);
+    }
+    let _ = win.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcuts(["ctrl+alt+v"])
+                .expect("global kayıt başarısız")
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        toggle_popup(app);
+                    }
+                })
+                .build(),
+        )
+        .invoke_handler(tauri::generate_handler![
+            get_settings,
+            save_settings,
+            clear_settings,
+            copy_text,
+            hide_popup,
+            open_url
+        ])
+        .run(tauri::generate_context!())
+        .expect("vardrop başlatılamadı");
+}

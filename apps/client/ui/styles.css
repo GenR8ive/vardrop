@@ -1,0 +1,253 @@
+/* Vardrop — sessiz, katı, güven veren minimal tema.
+   Tek vurgu rengi (mavi), nötr yüzey, hairline ayracı, sekme sıkar. */
+
+* { box-sizing: border-box; }
+
+:root {
+  --surface: #fafaf9;
+  --line: #e7e7e2;
+  --line-soft: #efefeb;
+  --text: #232428;
+  --text-muted: #75777f;
+  --text-faint: #9a9ca3;
+  --accent: #3457d5;
+  --sel-bg: #eceded;
+  --danger: #b3261e;
+  --ok: #1e7b45;
+  --secret: #a15c0f;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.wrap {
+  height: 100%;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 22px rgba(15, 18, 25, 0.16), 0 1px 2px rgba(15, 18, 25, 0.10);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- input ---------- */
+input, textarea {
+  width: 100%;
+  padding: 8px 11px;
+  font-size: 13px;
+  color: var(--text);
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+  box-sizing: border-box;
+}
+input::placeholder, textarea::placeholder { color: var(--text-faint); }
+input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(52, 87, 213, 0.14);
+}
+
+#setup-server, #setup-token {
+  margin-bottom: 7px;
+  font-family: "Cascadia Mono", ui-monospace, Consolas, monospace;
+  font-size: 11px;
+}
+textarea::placeholder { color: var(--text-faint); }
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(52, 87, 213, 0.14);
+}
+
+/* ---------- list ---------- */
+ul {
+  list-style: none;
+  margin: 5px 0 0;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+li {
+  padding: 5px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  min-height: 26px;
+}
+li.sel { background: var(--sel-bg); }
+li:hover { background: var(--line-soft); }
+li.sel:hover { background: var(--sel-bg); }
+
+/* liste öğeleri arası ölçülü ayrım: yalnız satırlar, başlıklar değil */
+li[data-i]:not(:first-of-type) { border-top: 1px solid var(--line-soft); }
+li.hdr + li[data-i] { border-top: 0; }
+
+li.hdr {
+  cursor: default;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 9px 9px 3px;
+}
+li.hdr:hover { background: transparent; }
+li.hdr.sel { background: var(--line-soft); }
+
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: 1px;
+  opacity: 0.9;
+  background: #b9bac2;
+}
+
+.gicon { margin-right: 6px; color: var(--text-faint); font-size: 10px; }
+.cnt {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.name .chip { flex: none; }
+
+.prev {
+  font-family: "Cascadia Mono", ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.path { color: var(--text-faint); font-weight: 400; }
+
+.chip {
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  background: transparent;
+  line-height: 14px;
+}
+.chip.secret {
+  border-color: #e5d5b8;
+  color: var(--secret);
+  background: #faf5ec;
+}
+
+li:has(.chip.secret) .name { font-weight: 650; }
+
+/* ---------- status ---------- */
+.status {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status.err { color: var(--danger); }
+.status.ok { color: var(--ok); }
+.status.warn { color: var(--secret); }
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.foot .status { flex: 1; text-align: left; padding-right: 0; }
+
+/* ---------- scrollbar ---------- */
+ul::-webkit-scrollbar { width: 9px; }
+ul::-webkit-scrollbar-track { background: transparent; }
+ul::-webkit-scrollbar-thumb {
+  background: #d9d9d4;
+  border-radius: 5px;
+  border: 2px solid var(--surface);
+}
+ul::-webkit-scrollbar-thumb:hover { background: #c8c8c2; }
+
+/* ---------- kurulum ---------- */
+.setup { padding: 10px 6px 4px; }
+.setup-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.setup-note {
+  margin: 0 0 12px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+.setup-row { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+.setup-row span { font-size: 11px; color: var(--text-muted); }
+
+/* ---------- secret PIN kutusu ---------- */
+.pinbox {
+  margin-top: 6px;
+  padding: 8px 6px 2px;
+  border-top: 1px solid var(--line);
+}
+.pinbox input {
+  font-family: "Cascadia Mono", ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+.pinbox .setup-row { margin-top: 7px; }
+
+button {
+  padding: 7px 15px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fbfbfa;
+  background: #232428;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+button:hover { background: #38393e; }
+button:active { background: #17181a; }
+button.ghost {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  font-weight: 500;
+  padding: 6px 10px;
+}
+button.ghost:hover { background: var(--line-soft); color: var(--text); }
+
+.hidden { display: none; }

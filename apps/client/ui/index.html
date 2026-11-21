@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Vardrop</title>
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- ilk kurulum (sunucu adresi + PAT) -->
+      <div id="setup" class="setup hidden">
+        <div class="setup-title">Vardrop · kurulum</div>
+        <p class="setup-note">
+          Panelde <b>Tokenlar</b> sayfasından <b>read PAT</b> üretin, ikisini de buraya yazın.
+          Token yalnız bu bilgisayarın kullanıcı profilinde durur; panelden istediğinde iptal edebilirsiniz.
+        </p>
+        <input id="setup-server" type="text" placeholder="sunucu adresi (ör. http://127.0.0.1:8080)"
+          spellcheck="false" autocomplete="off" autocapitalize="off" />
+        <input id="setup-token" type="password" placeholder="PAT (panel → Tokenlar → üret)"
+          spellcheck="false" autocomplete="off" />
+        <div class="setup-row">
+          <button id="setup-save" type="button">Bağlan</button>
+          <button id="setup-forget" type="button" class="ghost">Unut</button>
+          <span id="setup-msg"></span>
+        </div>
+      </div>
+
+      <!-- arama -->
+      <div id="searcher" class="hidden">
+        <input id="q" placeholder="İsim / grup / kluster ara — ↑↓ gez · Enter kopyalar · Esc kapat" spellcheck="false" autocomplete="off" />
+        <ul id="list"></ul>
+        <div id="pinbox" class="pinbox hidden">
+          <input id="pin-input" type="password" placeholder="secret PIN" autocomplete="off" />
+          <div class="setup-row">
+            <button id="pin-ok" type="button">Doğrula</button>
+            <button id="pin-cancel" type="button" class="ghost">Vazgeç</button>
+            <span id="pin-msg"></span>
+          </div>
+        </div>
+        <div class="foot">
+          <div id="status" class="status">Ctrl+Alt+V ile aç / kapat</div>
+          <button id="open-setup" type="button" class="ghost">bağlantı</button>
+        </div>
+      </div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "vardrop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Vardrop desktop client (Tauri 2). UI is vanilla JS; this file exists so release CI can invoke the Tauri CLI.",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0"
+  }
+}

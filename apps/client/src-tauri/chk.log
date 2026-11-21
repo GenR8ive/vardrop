@@ -1,0 +1,8 @@
+﻿cargo :     Checking variable-filler v0.1.0 (D:\Workspace\Rust\variable-manager\apps\client\src-tauri)
+At line:1 char:1
++ cargo check 2>&1 | Out-File -Encoding utf8 chk.log ; Get-Content chk. ...
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking va...ient\src-tauri):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.03s
