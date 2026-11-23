@@ -5,6 +5,7 @@ pub mod clusters;
 pub mod entries;
 pub mod groups;
 pub mod nav;
+pub mod thumbs;
 pub mod users;
 pub mod values;
 
@@ -32,5 +33,6 @@ pub fn router() -> Router<SharedState> {
         // entry + içerik + audit
         .merge(entries::router())
         .merge(values::router())
+        .merge(thumbs::router())
         .merge(audit::router())
 }

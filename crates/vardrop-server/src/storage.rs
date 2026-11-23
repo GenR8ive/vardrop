@@ -52,6 +52,27 @@ pub async fn read_blob(state: &SharedState, rel: &str, encrypted: bool) -> ApiRe
     }
 }
 
+/// Şifrelenmemiş blob'un yalnız ilk `cap` byte'ını okur (mime sniff için).
+/// Şifreli blob'larda kısmi okuma mümkün değil — çağıran taraf tam okuma yapmalı.
+pub async fn read_blob_head(
+    state: &SharedState,
+    rel: &str,
+    cap: usize,
+) -> ApiResult<Vec<u8>> {
+    use tokio::io::AsyncReadExt;
+    let full = format!("{}/{}", state.cfg.data.storage, rel);
+    let mut f = tokio::fs::File::open(&full)
+        .await
+        .map_err(|e| ApiError::not_found(format!("blob okunamadı: {e}")))?;
+    let mut buf = vec![0u8; cap];
+    let n = f
+        .read(&mut buf)
+        .await
+        .map_err(|e| ApiError::internal(format!("blob okunamadı: {e}")))?;
+    buf.truncate(n);
+    Ok(buf)
+}
+
 /// Önizleme için ilk `cap` byte'ı okur (büyük dosyaları yüklemez).
 pub async fn read_blob_prefix(
     state: &SharedState,

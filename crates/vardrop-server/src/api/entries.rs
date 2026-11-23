@@ -103,6 +103,15 @@ pub(crate) async fn detail_of(
     let files = bundle_files_of(&state.db, &entry.id, entry.current_version).await?;
     let paths = group_paths_of(&state.db, &[entry.cluster_id.clone()]).await?;
     let path = paths.get(&entry.group_id).cloned().unwrap_or_default();
+    // thumbnail göstermek için güncel sürümün mime'ı (yalnız binary)
+    let vrow = if entry.kind == "binary" {
+        fetch_current_version(&state.db, &entry).await.ok()
+    } else {
+        None
+    };
+    let is_image = crate::images::image_mime_of_blob(state, &entry, vrow.as_ref())
+        .await
+        .is_some();
 
     Ok(EntryDetail {
         id: entry.id.clone(),
@@ -128,6 +137,7 @@ pub(crate) async fn detail_of(
                 is_secret: f.is_secret,
             })
             .collect(),
+        is_image,
     })
 }
 
@@ -381,7 +391,17 @@ pub async fn list(
         } else {
             None
         };
-        let preview = crate::api::values::compute_preview(&state, &r.kind, r.is_secret, admin, vrow, file_count).await;
+        let is_image = crate::images::image_mime_of_blob(&state, &r, vrow).await.is_some();
+        let preview = crate::api::values::compute_preview(
+            &state,
+            &r.kind,
+            r.is_secret,
+            admin,
+            vrow,
+            file_count,
+            is_image,
+        )
+        .await;
         results.push(EntrySummary {
             id: r.id.clone(),
             cluster_id: r.cluster_id.clone(),
@@ -395,6 +415,7 @@ pub async fn list(
             current_version: r.current_version,
             updated_at: r.updated_at,
             preview,
+            is_image,
         });
     }
     Ok(Json(vardrop_core::SearchResponse {

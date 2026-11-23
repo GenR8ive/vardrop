@@ -5,6 +5,7 @@ mod auth;
 mod config;
 mod crypto;
 mod error;
+mod images;
 mod state;
 mod storage;
 mod util;

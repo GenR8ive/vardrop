@@ -159,6 +159,7 @@ pub(crate) async fn compute_preview(
     admin: bool,
     vr: Option<&VersionRow>,
     file_count: Option<i64>,
+    is_image: bool,
 ) -> String {
     use vardrop_core::ContentKind as CK;
     let k = CK::parse(kind).unwrap_or(CK::Text);
@@ -197,7 +198,11 @@ pub(crate) async fn compute_preview(
         }
         CK::Binary => {
             let size = vr.and_then(|v| v.size).unwrap_or(0);
-            format!("[dosya · {}]", vardrop_core::content::human_size(size))
+            if is_image {
+                format!("[görsel · {}]", vardrop_core::content::human_size(size))
+            } else {
+                format!("[dosya · {}]", vardrop_core::content::human_size(size))
+            }
         }
         CK::Bundle => format!(
             "[paket · {} dosya]",

@@ -118,6 +118,9 @@ pub struct EntrySummary {
     pub current_version: i64,
     pub updated_at: i64,
     pub preview: String,
+    /// binary + görsel içerik ise panel/client thumbnail gösterir.
+    #[serde(default)]
+    pub is_image: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,6 +149,9 @@ pub struct EntryDetail {
     pub created_at: i64,
     pub updated_at: i64,
     pub files: Vec<FileInfo>,
+    /// binary + görsel içerik ise panel/client thumbnail gösterir.
+    #[serde(default)]
+    pub is_image: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
