@@ -138,6 +138,20 @@ li.hdr.sel { background: var(--line-soft); }
 }
 .name .chip { flex: none; }
 
+/* görsel entry: satır içi küçük thumbnail */
+.row { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.row .col { min-width: 0; flex: 1; }
+.thumb {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--line-soft);
+}
+.thumb-miss { visibility: hidden; }
+
 .prev {
   font-family: "Cascadia Mono", ui-monospace, Consolas, monospace;
   font-size: 11px;

@@ -8,8 +8,11 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, sync::atomic::{AtomicIsize, Ordering}};
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+
+/// Popup açılmadan önce ön plandaki pencere. Paste-after-focus buraya döner.
+static TARGET_WINDOW: AtomicIsize = AtomicIsize::new(0);
 
 /// Kullanıcıya özel ayar dizini. Windows'ta Roaming değil Local — PAT dosya
 /// sunucusuna replike olmasın. Eski `variable-filler` yolu okunursa taşınır.
@@ -207,6 +210,112 @@ fn copy_text(text: String) -> Result<(), String> {
     cb.set_text(text).map_err(|e| e.to_string())
 }
 
+/// Görseli panoya resim olarak koyar (base64 kodlu dosya içeriği).
+#[tauri::command]
+fn copy_image(b64: String) -> Result<(), String> {
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64.trim())
+        .map_err(|e| format!("base64: {e}"))?;
+    let img = image::load_from_memory(&bytes).map_err(|e| format!("görsel çözülemedi: {e}"))?;
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    cb.set_image(arboard::ImageData {
+        width: w as usize,
+        height: h as usize,
+        bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Popup açılmadan önce ön plandaki pencereyi hatırlar (hedef odak).
+fn capture_target_window() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+        let hwnd = unsafe { GetForegroundWindow() };
+        TARGET_WINDOW.store(hwnd as isize, Ordering::SeqCst);
+    }
+}
+
+#[cfg(windows)]
+fn send_paste_keys() -> Result<(), String> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        keybd_event, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
+    };
+    unsafe {
+        keybd_event(VK_CONTROL as u8, 0, 0, 0);
+        keybd_event(VK_V as u8, 0, 0, 0);
+        keybd_event(VK_V as u8, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event(VK_CONTROL as u8, 0, KEYEVENTF_KEYUP, 0);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn send_paste_keys() -> Result<(), String> {
+    let status = std::process::Command::new("osascript")
+        .args([
+            "-e",
+            "tell application \"System Events\" to keystroke \"v\" using command down",
+        ])
+        .status()
+        .map_err(|e| format!("osascript çalıştırılamadı: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("osascript başarısız (Erişilebilirlik izni gerekli)".into())
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn send_paste_keys() -> Result<(), String> {
+    let status = std::process::Command::new("xdotool")
+        .args(["key", "--clearmodifiers", "ctrl+v"])
+        .status()
+        .map_err(|_| "xdotool bulunamadı — paste için kurun (apt install xdotool)".to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("xdotool başarısız".into())
+    }
+}
+
+/// Popup'ı kapatır, odağı popup açılmadan önceki pencereye verir ve Ctrl+V yollar.
+/// Beklemeler bloklayıcı olduğu için spawn_blocking'te çalışır.
+#[tauri::command]
+async fn paste_to_target(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("search") {
+        let _ = win.hide();
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(std::time::Duration::from_millis(120));
+
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::Foundation::HWND;
+            use windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+            let h = TARGET_WINDOW.load(Ordering::SeqCst);
+            if h != 0 {
+                unsafe {
+                    SetForegroundWindow(h as HWND);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(90));
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            // popup gizlenince odak önceki uygulamaya döner; kısa bekleme yeterli
+            std::thread::sleep(std::time::Duration::from_millis(90));
+        }
+
+        send_paste_keys()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Tarayıcıda URL açar (opener JS API'si başarısız olursa yedek yol).
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
@@ -229,6 +338,7 @@ fn toggle_popup(app: &AppHandle) {
         let _ = win.hide();
         return;
     }
+    capture_target_window();
     place_near_cursor(&win);
     let _ = win.show();
     let _ = win.set_focus();
@@ -281,6 +391,8 @@ fn main() {
             save_settings,
             clear_settings,
             copy_text,
+            copy_image,
+            paste_to_target,
             hide_popup,
             open_url
         ])

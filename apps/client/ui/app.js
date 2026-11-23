@@ -29,6 +29,9 @@ function api() {
   return (settings.server || "").replace(/\/+$/, "");
 }
 
+// entryId:version → Promise<blobUrl|null>. Thumbnail'lar oturum boyunca cache'lenir.
+const thumbCache = new Map();
+
 init();
 
 function httpWarning(server) {
@@ -92,6 +95,26 @@ async function apiGet(path) {
     const body = await res.text().catch(() => "");
     throw new Error("beklenmeyen cevap (" + body.slice(0, 60) + ")");
   }
+}
+
+/// Auth'lu GET → blob URL. 401'de kurulum ekranına yönlendirir (apiGet gibi).
+async function apiBlob(path) {
+  let res;
+  try {
+    res = await fetch(api() + path, {
+      headers: { Authorization: "Bearer " + settings.token },
+      cache: "no-store",
+    });
+  } catch (e) {
+    throw new Error("sunucuya erişilemedi: " + (e && e.message ? e.message : "?"));
+  }
+  if (res.status === 401) {
+    setStatus("bağlantı geçersiz / süresi doldu — kurulum ekranı açılıyor", "err");
+    setTimeout(showSetup, 1200);
+    throw new Error("401");
+  }
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return URL.createObjectURL(await res.blob());
 }
 
 // ---------- ilk kurulum: sunucu adresi + PAT ----------
@@ -262,7 +285,7 @@ async function search() {
     sel = nextSel(rows, 0, 1);
     render();
     if ((data.results || []).length === 0) setStatus("sonuç yok", "err");
-    else setStatus(data.total + " sonuç · Enter değişken kopyalar · input temizle = ağaca dön");
+    else setStatus(data.total + " sonuç · Enter kopyalar · Shift+Enter yapıştır · input temizle = ağaca dön");
   } catch (e) {
     if (e.message === "401") return;
     rows = [];
@@ -296,7 +319,7 @@ function onKey(e) {
     }
     e.preventDefault();
   } else if (e.key === "Enter") {
-    activate(rows[sel]);
+    activate(rows[sel], e.shiftKey);
     e.preventDefault();
   } else if (e.key === "Backspace") {
     // input boşsa entries-modundan ağaca geri
@@ -319,10 +342,10 @@ function gotoGroupsBack() {
   setStatus("gruplarda gezin — yazınca değişken arar");
 }
 
-async function activate(row) {
+async function activate(row, paste) {
   if (!row) return;
   if (row.t === "group") await drillInto(row);
-  else if (row.t === "entry") await pickEntry(row.entry);
+  else if (row.t === "entry") await pickEntry(row.entry, !!paste);
 }
 
 async function drillInto(row) {
@@ -335,7 +358,7 @@ async function drillInto(row) {
     render();
     if ((data.results || []).length === 0)
       setStatus("bu grupta değişken yok · Backspace = ağaca dön", "err");
-    else setStatus(data.total + " değişken · Enter kopyalar · Backspace = ağaca dön");
+    else setStatus(data.total + " değişken · Enter kopyalar · Shift+Enter yapıştır · Backspace = ağaca dön");
   } catch (e) {
     if (e.message === "401") return;
     setStatus("grup açılamadı: " + e.message, "err");
@@ -372,10 +395,16 @@ function render() {
       const chips =
         '<span class="chip">' + esc(entry.kind) + "</span>" +
         (entry.is_secret ? '<span class="chip secret">secret</span>' : "");
+      const thumb = entry.is_image
+        ? '<img class="thumb" alt="" draggable="false" data-thumb="' + esc(entry.id) + '" data-ver="' + entry.current_version + '">'
+        : "";
       return (
         '<li class="' + (isSel ? "sel" : "") + '" data-i="' + i + '">' +
+        '<div class="row">' + thumb +
+        '<div class="col">' +
         '<div class="name">' + esc(entry.name) + chips + "</div>" +
         '<div class="prev">' + esc(entry.preview || "") + "</div>" +
+        "</div></div>" +
         "</li>"
       );
     })
@@ -393,6 +422,23 @@ function render() {
   });
   const cur = listEl.querySelector("li.sel");
   if (cur) cur.scrollIntoView({ block: "nearest" });
+  hydrateThumbs();
+}
+
+/// Görsel satırların thumbnail'ını auth'lu fetch ile yükler (blob URL cache'li).
+async function hydrateThumbs() {
+  for (const img of listEl.querySelectorAll("img[data-thumb]")) {
+    const key = img.dataset.thumb + ":" + img.dataset.ver;
+    if (!thumbCache.has(key)) {
+      const p = apiBlob(
+        "/api/entries/" + encodeURIComponent(img.dataset.thumb) + "/thumbnail?v=" + img.dataset.ver
+      ).catch(() => null);
+      thumbCache.set(key, p);
+    }
+    const url = await thumbCache.get(key);
+    if (url && img.isConnected) img.src = url;
+    else if (!url) img.classList.add("thumb-miss");
+  }
 }
 
 // ---------- kopyalama ----------
@@ -448,17 +494,38 @@ function hidePinBox() {
   p.msg.textContent = "";
 }
 
-async function pickEntry(entry) {
+async function pickEntry(entry, paste) {
   if (!entry) return;
+  if (entry.is_image) {
+    await fetchImageAndCopy(entry, paste);
+    return;
+  }
   if (entry.kind === "binary" || entry.kind === "bundle") {
     setStatus("dosya tabanlı içerik — panelden indirebilirsiniz", "err");
     return;
   }
-  await fetchValueAndCopy(entry);
+  await fetchValueAndCopy(entry, paste);
+}
+
+/// Kopyalama sonrası: paste istendiyse odak hedef pencereye dönüp Ctrl+V gider,
+/// aksi halde popup kısa durum mesajıyla kapanır.
+async function finishCopy(name, paste) {
+  if (paste) {
+    setStatus("yapıştırılıyor: " + name, "ok");
+    try {
+      await invoke("paste_to_target");
+    } catch (e) {
+      setStatus("yapıştırma başarısız: " + (e && e.message ? e.message : e) + " — pano içeriği korundu", "warn");
+    }
+    return;
+  }
+  setStatus("kopyalandı: " + name, "ok");
+  await new Promise((res2) => setTimeout(res2, 250));
+  await invoke("hide_popup");
 }
 
 /// Değeri çeker, panoya kopyalar. 403 pin_required → PIN kutusu → unlock → tekrar.
-async function fetchValueAndCopy(entry) {
+async function fetchValueAndCopy(entry, paste) {
   let res;
   try {
     res = await fetch(api() + "/api/entries/" + entry.id + "/value", {
@@ -478,7 +545,7 @@ async function fetchValueAndCopy(entry) {
     const data = await res.json().catch(() => ({}));
     if (data.code === "pin_required") {
       setStatus("secret — PIN gerekli", "err");
-      showPinBox(() => fetchValueAndCopy(entry));
+      showPinBox(() => fetchValueAndCopy(entry, paste));
       return;
     }
     setStatus("yetki yok (403)", "err");
@@ -496,7 +563,56 @@ async function fetchValueAndCopy(entry) {
   } catch (_) {
     await invoke("copy_text", { text });
   }
-  setStatus("kopyalandı: " + entry.name, "ok");
-  await new Promise((res2) => setTimeout(res2, 250));
-  await invoke("hide_popup");
+  await finishCopy(entry.name, paste);
+}
+
+/// Görseli indirip panoya resim olarak koyar (arboard, Rust tarafında decode).
+async function fetchImageAndCopy(entry, paste) {
+  let res;
+  try {
+    res = await fetch(api() + "/api/entries/" + entry.id + "/value", {
+      headers: { Authorization: "Bearer " + settings.token },
+      cache: "no-store",
+    });
+  } catch (_) {
+    setStatus("sunucuya erişilemedi", "err");
+    return;
+  }
+  if (res.status === 401) {
+    setStatus("bağlantı geçersiz — kurulum ekranı açılıyor", "err");
+    setTimeout(showSetup, 1200);
+    return;
+  }
+  if (res.status === 403) {
+    const data = await res.json().catch(() => ({}));
+    if (data.code === "pin_required") {
+      setStatus("secret görsel — PIN gerekli", "err");
+      showPinBox(() => fetchImageAndCopy(entry, paste));
+      return;
+    }
+    setStatus("yetki yok (403)", "err");
+    return;
+  }
+  if (!res.ok) {
+    setStatus("görsel alınamadı (HTTP " + res.status + ")", "err");
+    return;
+  }
+  const b64 = arrayBufferToBase64(await res.arrayBuffer());
+  try {
+    await invoke("copy_image", { b64 });
+  } catch (e) {
+    setStatus("görsel panoya konamadı: " + (e && e.message ? e.message : e), "err");
+    return;
+  }
+  await finishCopy(entry.name, paste);
+}
+
+function arrayBufferToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
 }
