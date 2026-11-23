@@ -54,8 +54,17 @@ Dağıtımda tek binary istenirse dist içeriğini `include_bytes!`/rust-embed i
 
 - Kopyalama `navigator.clipboard` (WebView2) + fallback **arboard** (Rust komutu). Planın
   `tauri-plugin-clipboard-manager` yerine arboard — dış JS eklenti kurulumu beklemek istedik, ikisi de davranışı aynı.
-- **Paste (otomatik yapıştırma) v0.1'de yok** — plan F4'te `enigo`/SendInput ile "focus sonra paste" senaryosu için;
-  kısa ömürlü popup'ta odağın çalınması istenmediği için copy-only başlatıldı.
+- **Paste (yapıştırma) v0.2'de geldi**: `Shift+Enter` (ya da tıklama + istek) kopyaladıktan sonra
+  popup'ı kapatır, odağı popup açılmadan önceki pencereye verir ve Ctrl+V yollar
+  (`paste_to_target`). Windows `SetForegroundWindow` + `keybd_event` (windows-sys);
+  macOS `osascript` keystroke; Linux `xdotool` (kurulu değilse kopya panoda kalır, hata gösterilir).
+  Popup açılırken hedef HWND `GetForegroundWindow` ile hatırlanır — kısayol basıldığı andaki
+  odak, paste'in gideceği yerdir.
+- **Görsel entry'ler**: `binary` + magic-byte sniff (png/jpeg/gif/webp/bmp) → `is_image`.
+  Server `GET /api/entries/{id}/thumbnail` 160px JPEG üretir (şifresizse storage'da
+  `thumb-{version}.jpg` cache). Client satırda thumbnail blob URL gösterir; Enter görseli
+  indirip **panoya resim olarak** koyar (Rust `image` decode → arboard `ImageData`), sonra
+  Shift+Enter ile paste yapılabilir. SVG bilinçli olarak raster pipeline dışıdır.
 - Tauri identifier: `dev.vman.vardrop`. Ayar + PAT **OS anahtarlığında değil**:
   Windows `%LOCALAPPDATA%\vardrop` (eski `variable-filler` Local/Roaming yolları ilk okumada taşınır),
   macOS `~/Library/Application Support/vardrop`, Linux `$XDG_CONFIG_HOME` veya `~/.config/vardrop`.
@@ -63,6 +72,7 @@ Dağıtımda tek binary istenirse dist içeriğini `include_bytes!`/rust-embed i
   değerlendirme `SECURITY.md`.
 - UI npm'siz vanilla JS (`window.__TAURI__`, `withGlobalTauri: true`); bundler eklenebilir.
 - Bundle/binary içerik popup'tan kopyalanamaz (dosya tabanlı) — yönlendirme: panel.
+  İstisna: görsel binary'ler yukarıdaki resim kopyalama akışıyla panoya konur.
 
 ## 8. Sunucu notları
 
@@ -101,3 +111,22 @@ paketleri (binary arşivi + ghcr imajı) istemci içermez — dağıtım tek kan
 8. PAT akışı: token'lar DB'de kalıcı (api_tokens); istemci ayarları
    (`server.txt` + `token.txt`) kullanıcı profilinde düz metin — DPAPI/keyring
    sarması v0.2 adayı (SECURITY.md "Bilinen sınırlar").
+9. Görsel: `is_image` sniff'i yalnız şifresiz binary'de çalışır — secret görsel
+   thumbnail almaz, panel indirir. SVG mime'a girmez (thumbnail yok).
+10. PWA: `sw.js` kabuk cache'i sürüm sabitiyle yönetilir (`vardrop-shell-v1`) —
+    deploy sonrası eski kabuk bir navigasyonda tazelenir; öncü güncelleme akışı yok.
+    `beforeinstallprompt` Chrome/Edge koşullarına bağlı; iOS kurulum yalnız el ile
+    "Ana Ekrana Ekle".
+
+## 11. Panel PWA — iki uygulama, tek kaynak
+
+Panel (`apps/admin-web`) v0.2'den itibaren kurulabilir PWA'dır: `manifest.webmanifest` +
+`sw.js` + 192/512/maskable ikonlar `public/` altında, `dist/` köküne kopyalanır ve
+server `ServeDir` bunları statik verir (aynı origin, scope `/`).
+
+- **Roller**: web = bakma/yazma (cluster, entry, kullanıcı, audit); Tauri = kullanma
+  (Ctrl+Alt+V arama, kopyala/yapıştır). Panelde "Uygulamayı yükle" düğmesi
+  `beforeinstallprompt` geldiğinde görünür; kurulum masaüstü ikonu verir.
+- Service worker: navigasyon network-first (çevrimdışıysa kabuk), varlıklar cache-first.
+  `/api/**` asla cache'lenmez — token'lı yanıtlar ve secret içerik cihazda kalıcı olmaz.
+- Thumbnail blob URL'leri tarayıcı belleğinde; SW bunları diske yazmaz.

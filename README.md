@@ -29,7 +29,12 @@ variable-manager/
 
 Kurulumdan sonra istemcinin kurulum ekranına **sunucu adresini** ve panelden
 ürettiğiniz **read PAT**'i girin (panel → Tokenlar; token yalnız bir kez
-gösterilir). `Ctrl+Alt+V` aramayı açar, Enter panoya kopyalar.
+gösterilir). `Ctrl+Alt+V` aramayı açar, **Enter** panoya kopyalar,
+**Shift+Enter** odaktaki uygulamaya yapıştırır (paste-after-focus).
+Görsel entry'lerde küçük thumbnail görünür; Enter görseli panoya resim olarak koyar.
+
+Panel ayrıca kurulabilir **PWA**: tarayıcıda "Uygulamayı yükle" ile masaüstüne
+kurulur — bakma/yazma için web, kopyalama/yapıştırma için Vardrop istemcisi.
 
 ## Sunucu (host eden)
 
@@ -51,7 +56,7 @@ Yedek: `master.key` + veritabanı + `storage/`. Anahtar kaybı = secret'lar çö
 ## Model
 
 - **Cluster** → **Group** (ağaç) → **Entry**.
-- Türler: `text` / `json` / `yaml` · `binary` · `bundle`.
+- Türler: `text` / `json` / `yaml` · `binary` (görseller otomatik thumbnail alır) · `bundle`.
 - Her değişiklik yeni sürüm. Secret'lar diskte AES-256-GCM (`master.key`).
 - Roller: admin · editor · viewer. Token kapsamları: read · write · admin.
 - Kritik işlemler audit log'a yazılır.
