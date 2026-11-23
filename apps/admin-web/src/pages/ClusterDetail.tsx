@@ -4,6 +4,7 @@ import { Api } from "../api";
 import type { ClusterCard, EntryKind, EntrySummary, GroupNode } from "../types";
 import GroupTree, { useFlattened } from "../components/GroupTree";
 import { KindBadge, SecretBadge } from "../components/Badges";
+import Thumb from "../components/Thumb";
 import { btnCls, inputCls, labelCls, Modal } from "../components/Modal";
 import { useFeedback } from "../components/Feedback";
 
@@ -237,10 +238,15 @@ export default function ClusterDetail() {
                   return (
                     <tr key={en.id} className="border-t border-slate-800 hover:bg-slate-800/40">
                       <td className="px-4 py-2">
-                        <button className="text-white hover:text-brand-500" onClick={() => nav(`/entries/${en.id}`)}>
-                          {en.name}
-                        </button>
-                        <div className="text-[11px] text-slate-500 truncate">{gname || en.path}</div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          {en.is_image && <Thumb entryId={en.id} version={en.current_version} size={28} alt={en.name} />}
+                          <div className="min-w-0">
+                            <button className="text-white hover:text-brand-500" onClick={() => nav(`/entries/${en.id}`)}>
+                              {en.name}
+                            </button>
+                            <div className="text-[11px] text-slate-500 truncate">{gname || en.path}</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap">
                         <div className="flex gap-1">

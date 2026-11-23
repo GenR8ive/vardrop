@@ -257,6 +257,17 @@ export const Api = {
     return fetchBlob(url, token);
   },
 
+  /** Binary görselin sunucu üretimi küçük JPEG thumbnail'ı. */
+  thumbnailUrl(id: string, version?: number): Promise<string> {
+    const q = version ? `?v=${version}` : "";
+    return fetchBlob(`/api/entries/${id}/thumbnail${q}`, getToken());
+  },
+
+  /** Binary görselin tam boy içeriği (blob URL). */
+  imageUrl(id: string): Promise<string> {
+    return fetchBlob(`/api/entries/${id}/value`, getToken());
+  },
+
   // içerik çekme: text/json value; binary/bundle dosya indirme
   async fetchValue(id: string, isFile: boolean): Promise<string | null> {
     const token = getToken();

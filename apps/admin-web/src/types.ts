@@ -66,6 +66,7 @@ export interface EntrySummary {
   current_version: number;
   updated_at: number;
   preview: string;
+  is_image: boolean;
 }
 
 export interface FileInfo {
@@ -91,6 +92,7 @@ export interface EntryDetail {
   created_at: number;
   updated_at: number;
   files: FileInfo[];
+  is_image: boolean;
 }
 
 export interface VersionInfo {

@@ -14,3 +14,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+// PWA: uygulama kabuğu service worker'ı (üretimde de dev'de de kayıt).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* dev/preview farklı origin olabilir; kritik değil */
+    });
+  });
+}

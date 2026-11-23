@@ -23,6 +23,8 @@ export default function EntryEdit() {
   const [desc, setDesc] = useState("");
   const [isSecret, setIsSecret] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   // PIN akışı (secret okuma kapısı)
   const [pinModal, setPinModal] = useState<(() => Promise<void>) | null>(null);
@@ -59,6 +61,50 @@ export default function EntryEdit() {
   useEffect(() => {
     reload();
   }, [id]);
+
+  // binary görsel: tam boy önizleme blob URL'i (sürüm/ad değişince tazelenir)
+  useEffect(() => {
+    if (!entry || entry.kind !== "binary" || !entry.is_image) {
+      setImgUrl(null);
+      return;
+    }
+    let alive = true;
+    let created: string | null = null;
+    Api.imageUrl(entry.id)
+      .then((u) => {
+        if (!alive) {
+          URL.revokeObjectURL(u);
+          return;
+        }
+        created = u;
+        setImgUrl(u);
+      })
+      .catch(() => setImgUrl(null));
+    return () => {
+      alive = false;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [entry?.id, entry?.current_version, entry?.is_image]);
+
+  // binary entry sayfasındayken panodan görsel yapıştırma (Ctrl+V) ile upload
+  useEffect(() => {
+    if (entry?.kind !== "binary") return;
+    function onPaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (!item.type.startsWith("image/")) continue;
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          uploadFiles([file]);
+          return;
+        }
+      }
+    }
+    window.addEventListener("paste", onPaste as EventListener);
+    return () => window.removeEventListener("paste", onPaste as EventListener);
+  }, [entry?.id, entry?.kind]);
 
   async function save() {
     if (!entry) return;
@@ -99,7 +145,7 @@ export default function EntryEdit() {
     }
   }
 
-  async function upload(files: FileList | null) {
+  async function uploadFiles(files: FileList | File[] | null) {
     if (!entry || !files || files.length === 0) return;
     setErr(null);
     try {
@@ -270,23 +316,61 @@ export default function EntryEdit() {
           {entry.kind === "binary" && (
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
               <label className={labelCls}>Dosya</label>
-              {entry.files.length > 0 ? (
-                <div className="text-sm text-slate-300 mb-2 flex items-center gap-2">
-                  <button className="text-brand-500 hover:text-brand-400" onClick={() => download(null, entry.name)}>
-                    indir
-                  </button>
-                  <span className="text-xs text-slate-500">
-                    {humanSize(entry.files[0].size)}
-                  </span>
-                </div>
-              ) : (
-                <div className="text-sm text-slate-300 mb-2 flex items-center gap-2">
-                  <button className="text-brand-500 hover:text-brand-400" onClick={() => download(null, entry.name)}>
-                    indir
-                  </button>
-                </div>
-              )}
-              <input type="file" multiple={false} onChange={(e) => upload(e.target.files)} className="text-sm text-slate-400" />
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  uploadFiles(e.dataTransfer.files);
+                }}
+                className={`rounded-lg border border-dashed p-3 transition-colors ${
+                  dragOver ? "border-brand-500 bg-slate-800/60" : "border-slate-700"
+                }`}
+              >
+                {entry.is_image && imgUrl ? (
+                  <div className="mb-3 flex items-start gap-3">
+                    <img
+                      src={imgUrl}
+                      alt={entry.name}
+                      className="max-h-48 max-w-[240px] rounded border border-slate-700 object-contain bg-slate-800"
+                    />
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <div>görsel</div>
+                      {versions.find((v) => v.version === entry.current_version)?.size ? (
+                        <div>{humanSize(versions.find((v) => v.version === entry.current_version)!.size!)}</div>
+                      ) : null}
+                      <button className="text-brand-500 hover:text-brand-400" onClick={() => download(null, entry.name)}>
+                        indir
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-2 text-sm text-slate-300 flex items-center gap-2">
+                    <button className="text-brand-500 hover:text-brand-400" onClick={() => download(null, entry.name)}>
+                      indir
+                    </button>
+                    {versions.find((v) => v.version === entry.current_version)?.size ? (
+                      <span className="text-xs text-slate-500">
+                        {humanSize(versions.find((v) => v.version === entry.current_version)!.size!)}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+                <input
+                  type="file"
+                  multiple={false}
+                  accept="image/*"
+                  onChange={(e) => uploadFiles(e.target.files)}
+                  className="text-sm text-slate-400"
+                />
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Görseli sürükleyip bırakın, panodan yapıştırın (Ctrl+V) veya seçin. Thumbnail otomatik üretilir.
+                </p>
+              </div>
             </div>
           )}
 
@@ -310,7 +394,7 @@ export default function EntryEdit() {
                 ))}
                 {entry.files.length === 0 && <div className="text-xs text-slate-600">boş paket</div>}
               </div>
-              <input type="file" multiple onChange={(e) => upload(e.target.files)} className="text-sm text-slate-400" />
+              <input type="file" multiple onChange={(e) => uploadFiles(e.target.files)} className="text-sm text-slate-400" />
             </div>
           )}
 

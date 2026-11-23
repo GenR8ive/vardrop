@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { FeedbackProvider } from "./Feedback";
+import InstallButton from "./InstallButton";
 
 const navItems = [
   { to: "/", label: "Concept", end: true },
@@ -39,6 +40,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
         </nav>
+        <InstallButton />
         <div className="p-3 border-t border-slate-800">
           <div className="text-sm text-slate-300">{user?.display_name || user?.username}</div>
           <div className="text-xs text-slate-500 mb-2">{user?.role}</div>
