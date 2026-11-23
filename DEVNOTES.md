@@ -65,6 +65,9 @@ Dağıtımda tek binary istenirse dist içeriğini `include_bytes!`/rust-embed i
   `thumb-{version}.jpg` cache). Client satırda thumbnail blob URL gösterir; Enter görseli
   indirip **panoya resim olarak** koyar (Rust `image` decode → arboard `ImageData`), sonra
   Shift+Enter ile paste yapılabilir. SVG bilinçli olarak raster pipeline dışıdır.
+- **Tray ikonu**: uygulama penceresiz yaşar (popup `skipTaskbar`); tepsi menüsü
+  Ara / Bağlantı… / Çıkış, sol tık popup açar. Linux'ta libayatana-appindicator gerekir
+  (CI build dep'sinde var; .deb runtime bağımlılığı el ile kurulabilir).
 - Tauri identifier: `dev.vman.vardrop`. Ayar + PAT **OS anahtarlığında değil**:
   Windows `%LOCALAPPDATA%\vardrop` (eski `variable-filler` Local/Roaming yolları ilk okumada taşınır),
   macOS `~/Library/Application Support/vardrop`, Linux `$XDG_CONFIG_HOME` veya `~/.config/vardrop`.

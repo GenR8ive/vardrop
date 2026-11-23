@@ -344,6 +344,51 @@ fn toggle_popup(app: &AppHandle) {
     let _ = win.set_focus();
 }
 
+/// Sistem tepsisi: pencere görünmese de uygulama yaşar, tepside ikon + menü.
+fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{MenuBuilder, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    use tauri::Emitter;
+
+    let search = MenuItem::with_id(app, "search", "Ara (Ctrl+Alt+V)", true, None::<&str>)?;
+    let conn = MenuItem::with_id(app, "conn", "Bağlantı…", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Çıkış", true, None::<&str>)?;
+    let menu = MenuBuilder::new(app).items(&[&search, &conn]).separator().item(&quit).build()?;
+
+    let tray = TrayIconBuilder::with_id("vardrop-tray")
+        .icon(app.default_window_icon().expect("ikon").clone())
+        .tooltip("Vardrop — Ctrl+Alt+V")
+        .menu(&menu)
+        // sol tık menü değil popup açsın
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "search" => toggle_popup(app),
+            "conn" => {
+                if let Some(win) = app.get_webview_window("search") {
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+                // JS setup ekranını açar (server adresi hatırlanır)
+                let _ = app.emit("tray-open-setup", ());
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_popup(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    let _ = tray;
+    Ok(())
+}
+
 /// İmlecin hemen yanına koyar; ekran sağ/dibi taşarsa içeri alır.
 fn place_near_cursor(win: &WebviewWindow) {
     let app = win.app_handle();
@@ -386,6 +431,11 @@ fn main() {
                 })
                 .build(),
         )
+        // tepsi ikonu: uygulama penceresiz de yaşar (çıkış = tepsi menüsü)
+        .setup(|app| {
+            setup_tray(app.handle())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,

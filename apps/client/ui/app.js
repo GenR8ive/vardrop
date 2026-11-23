@@ -63,6 +63,10 @@ async function init() {
   settings = await invoke("get_settings");
   document.getElementById("open-setup").onclick = () => showSetup();
   document.getElementById("setup-forget").onclick = forgetSettings;
+  // tepsi menüsü "Bağlantı…" → pencere Rust tarafında gösterilir, setup ekranı burada açılır
+  try {
+    await window.__TAURI__.event.listen("tray-open-setup", () => showSetup());
+  } catch (_) {}
   if (!settings.server || !settings.has_token) {
     showSetup();
   } else {
