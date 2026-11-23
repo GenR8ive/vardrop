@@ -1,97 +1,191 @@
 # Vardrop
 
-Kendi sunucunuzda çalışan değişken / secret kaydı. Rust **vardrop-server**
-(axum + SQLite + yönetim paneli) ve **Vardrop** (Tauri 2 masaüstü istemci).
+Self-hosted registry for the text you retype all day: connection strings, API keys,
+prompt snippets, agent skills, images, and file bundles.
 
-Biz host etmiyoruz. Sunucuyu siz kurarsınız. İstemciyi platformunuza göre
-GitHub Releases'tan indirirsiniz. Telemetri yok. Lisans: [MIT](LICENSE).
+One server, two faces:
+
+- **Web panel** (installable PWA) — for *looking and writing*: browse clusters,
+  edit entries, manage users, read the audit log.
+- **Desktop client** (Windows / macOS / Linux) — for *using*: press
+  `Ctrl+Alt+V` anywhere, search, **Enter** copies the value,
+  **Shift+Enter** pastes it straight into the window you were typing in.
+
+No accounts on our side, no telemetry, single SQLite file on your disk.
+License: [MIT](LICENSE).
 
 ```
-variable-manager/
-├─ docs/SELF-HOST.md         # sunucu kurulumu (Docker, systemd, TLS)
-├─ docs/RELEASES.md          # release kesimi ve indirilecek dosyalar
-├─ SECURITY.md               # tehdit modeli, istemci PAT saklama
-├─ deploy/                   # Caddy, systemd, Docker config
-├─ crates/vardrop-server/   # HTTP sunucusu
-├─ apps/admin-web/           # panel (sunucu ile aynı origin)
-└─ apps/client/              # Vardrop
+┌────────────────────────────────┐            ┌──────────────────────────────────┐
+│  SERVER — Registry              │            │  CLIENT — Vardrop                │
+│                                │            │                                  │
+│  axum REST API  ◄───────────────┼──HTTPS────►│  tray + global hotkey Ctrl+Alt+V │
+│  Admin panel (PWA)              │   JSON     │  popup near the caret            │
+│  SQLite (sqlx)                  │            │  search → copy / paste-after-    │
+│  Secrets: AES-256-GCM           │            │  focus, image → clipboard        │
+│  Versions · Audit · Tokens      │            │  PAT auth (read scope)           │
+└────────────────────────────────┘            └──────────────────────────────────┘
 ```
 
-## İstemci (kullanan kişi)
+## Features
 
-**GitHub Releases** → `Vardrop` → platform paketi:
+- **Cluster → Group tree → Entry** organization, unlimited depth.
+- Content kinds: `text` / `json` / `yaml` / `binary` / `bundle` (multi-file packages).
+- **Secrets** encrypted at rest (AES-256-GCM, single `master.key`), masked previews,
+  optional **PIN gate** — a 10-minute unlock window per device; every reveal is audited.
+- **Versions**: every write creates a new version; restore any of them.
+- **Images**: upload via drag-drop, file picker, or `Ctrl+V` from the clipboard;
+  server-generated thumbnails appear in the panel and the client popup.
+  The client can put an image on the clipboard as a real bitmap.
+- **Paste-after-focus**: `Shift+Enter` hides the popup, returns focus to the window
+  that was active when you pressed the hotkey, and sends `Ctrl+V`.
+- **Tokens**: login sessions and personal access tokens, SHA-256 hashed server-side,
+  scopes `read` / `write` / `admin`, 1–3650-day validity, revocable, last-use tracked.
+- **Audit log**: logins (success and failure), entry changes, secret reveals, file reads.
+- **PWA**: install the panel to your desktop or phone; offline shell, API never cached.
+- Login brute-force guard: 5 failures → 60 s IP lockout.
 
-| Platform | Dosya |
-|---|---|
-| Windows x64 | `Vardrop_*_x64-setup.exe` |
-| macOS Apple Silicon / Intel | `*.dmg` |
-| Linux | `.deb` / `.rpm` / `.AppImage` |
+## Quick start (server)
 
-Kurulumdan sonra istemcinin kurulum ekranına **sunucu adresini** ve panelden
-ürettiğiniz **read PAT**'i girin (panel → Tokenlar; token yalnız bir kez
-gösterilir). `Ctrl+Alt+V` aramayı açar, **Enter** panoya kopyalar,
-**Shift+Enter** odaktaki uygulamaya yapıştırır (paste-after-focus).
-Görsel entry'lerde küçük thumbnail görünür; Enter görseli panoya resim olarak koyar.
-
-Panel ayrıca kurulabilir **PWA**: tarayıcıda "Uygulamayı yükle" ile masaüstüne
-kurulur — bakma/yazma için web, kopyalama/yapıştırma için Vardrop istemcisi.
-
-## Sunucu (host eden)
-
-Önerilen yol Docker. Ayrıntı ve systemd: [docs/SELF-HOST.md](docs/SELF-HOST.md).
+Recommended: Docker.
 
 ```bash
 docker compose up -d --build
 docker compose exec registry cat /data/initial-admin-password.txt
+docker compose exec registry rm /data/initial-admin-password.txt
 ```
 
-Panel `http://127.0.0.1:8080`. İnternete yalnız TLS arkasından açın
-(`docker compose --profile tls up -d` veya Caddy/Nginx).
+Panel: `http://127.0.0.1:8080`. Log in as `admin` with the printed password, change it,
+then set a PIN if you will store secrets.
 
-Release arşivi (`vardrop-server-*`) ikili + paneli birlikte getirir;
-Node veya Rust kurmadan `vardrop-server init` sonra `serve`.
+Expose it beyond loopback only behind TLS — see
+[docs/SELF-HOST.md](docs/SELF-HOST.md) (Caddy/Nginx examples, systemd unit,
+published `ghcr.io` image, release archive without Docker):
 
-Yedek: `master.key` + veritabanı + `storage/`. Anahtar kaybı = secret'lar çözülemez.
+```bash
+docker compose --profile tls up -d      # Caddy + automatic certificates
+```
 
-## Model
+Back up three things together: `master.key` (lost key = unreadable secrets),
+`registry.db`, `storage/`.
 
-- **Cluster** → **Group** (ağaç) → **Entry**.
-- Türler: `text` / `json` / `yaml` · `binary` (görseller otomatik thumbnail alır) · `bundle`.
-- Her değişiklik yeni sürüm. Secret'lar diskte AES-256-GCM (`master.key`).
-- Roller: admin · editor · viewer. Token kapsamları: read · write · admin.
-- Kritik işlemler audit log'a yazılır.
+## Install the client
 
-## Geliştirme
+Grab your platform package from [Releases](../../releases):
 
-```powershell
-cargo run -p vardrop-server -- init
+| Platform | File |
+|---|---|
+| Windows x64 | `Vardrop_*_x64-setup.exe` (per-user install: `%LOCALAPPDATA%\Vardrop`) |
+| macOS arm64 / x64 | `*.dmg` |
+| Linux x64 / arm64 | `.deb` / `.rpm` / `.AppImage` |
+
+Then connect it:
+
+1. In the panel open **Tokenlar**, create a **read** PAT (validity 1–3650 days;
+   the raw token is shown exactly once).
+2. Launch Vardrop, enter your **server URL** and the **PAT**.
+3. `Ctrl+Alt+V` opens the popup. Type to search, ↑↓ to move.
+
+| Key | Action |
+|---|---|
+| `Enter` | Copy value (images: bitmap to clipboard) |
+| `Shift+Enter` | Copy **and** paste into the previously focused window |
+| `Backspace` | Back to the group tree |
+| `Esc` | Hide popup |
+
+Paste-after-focus support: **Windows** full (explicit window restore + `SendInput`).
+**macOS** via `osascript` — grant Accessibility permission on first use.
+**Linux** via `xdotool` on X11; on Wayland the copy stays on the clipboard with a
+notice — paste it manually.
+
+## API
+
+Bearer token, JSON everywhere:
+
+```
+POST /api/auth/login              { username, password } → { token, user }
+POST /api/auth/unlock             { pin }                 → 10-min secret window
+GET  /api/auth/me · /api/auth/tokens (PAT create/list/delete)
+
+GET/POST   /api/clusters · /api/clusters/{id}/groups · PATCH/DELETE /api/groups/{id}
+GET/POST   /api/entries?q=&cluster_id=&group_id=&kind=&tag=&secret=
+GET/PATCH  /api/entries/{id} · /api/entries/{id}/versions/{v}/restore
+POST /api/entries/{id}/files          (multipart upload)
+GET  /api/entries/{id}/value          (text/json value · binary download · ?file_id= for bundles)
+GET  /api/entries/{id}/thumbnail      (160px JPEG for image entries)
+GET/DELETE /api/entries/{id}/files/{fid}
+
+GET/POST/PATCH/DELETE /api/users       (admin)
+GET  /api/audit?user=&action=&from=&to= (admin)
+GET  /api/health
+```
+
+Full design and schema: [docs/PLAN.md](docs/PLAN.md) (Turkish).
+
+## Roles
+
+| Role | Read | Write | Users / audit |
+|---|---|---|---|
+| admin | ✓ | ✓ | ✓ |
+| editor | ✓ | ✓ | — |
+| viewer | ✓ | — | — |
+
+Secret values additionally require the PIN window for every identity — admin included.
+
+## Repository layout
+
+```
+crates/vardrop-core/      shared DTOs, content kinds, role/scope model
+crates/vardrop-server/    axum server: api/, auth/, crypto, storage, thumbnails
+apps/admin-web/           panel — Vite + React + TS + Tailwind, PWA (public/)
+apps/client/             Vardrop — Tauri 2, vanilla JS popup
+deploy/                   Caddy, systemd, Docker configs
+docs/                     PLAN.md · SELF-HOST.md · RELEASES.md
+```
+
+## Development
+
+```bash
+cargo run -p vardrop-server -- init     # creates config.toml, data/, prints admin password
 cargo run -p vardrop-server -- serve
+cargo test --workspace
 ```
 
-`serve` config yolu: `--config`, yoksa `VARDROP_CONFIG`, yoksa `./config.toml`.
+Panel (dev server proxies `/api` → 127.0.0.1:8080):
 
-```powershell
+```bash
 cd apps/admin-web
 npm ci
-npm run dev          # :5173, /api → :8080
-npm run build        # dist/; serve bunu panel.dist'ten verir
+npm run dev        # http://localhost:5173
+npm run build      # dist/ — served by the server (panel.dist config)
 ```
 
-```powershell
+Client:
+
+```bash
 cd apps/client
 npm ci
 npm run tauri dev
-npm run tauri build
+npm run tauri build   # apps/client/src-tauri/target/release/bundle/
 ```
 
-Geliştirme şablonu `config.example.toml` (`cors_allow_all = true`, vite için).
-Host şablonu `config.host.example.toml`. Kod, config dosyası yokken CORS'u kapalı tutar.
+Config: `config.example.toml` for development (CORS open for the Vite port),
+`config.host.example.toml` for deployments. Path resolution: `--config`,
+else `VARDROP_CONFIG`, else `./config.toml`.
 
-## Uyarılar
+## Security notes
 
-- `data/`, `config.toml`, `master.key`, `*.db` git'e girmez.
-- Trafik düz HTTP'dir. LAN ötesi kullanımda ters proxy + TLS şart.
-- İstemci PAT'i OS anahtarlığında değil, kullanıcı profilinde düz dosyada tutar.
-  Değerlendirme: [SECURITY.md](SECURITY.md).
+- Secrets are AES-256-GCM encrypted with `master.key`; DB backups keep them sealed.
+  No key rotation yet — see [DEVNOTES.md](DEVNOTES.md).
+- Passwords: argon2id. Tokens: stored as SHA-256 hashes, raw value shown once.
+- Client PAT lives in a plain file under the user profile
+  (`%LOCALAPPDATA%\vardrop`), not an OS keychain — rationale and threat model in
+  [SECURITY.md](SECURITY.md).
+- Traffic is plain HTTP on the wire — put TLS in front for anything beyond loopback.
+- Builds are unsigned: SmartScreen / Gatekeeper will warn.
 
-Tasarım sapmaları: [DEVNOTES.md](DEVNOTES.md).
+Known gaps and deliberate deviations are tracked in [DEVNOTES.md](DEVNOTES.md).
+Release process: [docs/RELEASES.md](docs/RELEASES.md).
+
+## License
+
+[MIT](LICENSE)
