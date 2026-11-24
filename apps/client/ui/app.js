@@ -67,6 +67,10 @@ async function init() {
   try {
     await window.__TAURI__.event.listen("tray-open-setup", () => showSetup());
   } catch (_) {}
+  // Esc popup'ı kapatır — hangi ekranda olursa olsun (kurulum dahil)
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") invoke("hide_popup");
+  });
   if (!settings.server || !settings.has_token) {
     showSetup();
   } else {
@@ -201,9 +205,6 @@ async function startSearch() {
     timer = setTimeout(search, 130);
   });
   qEl.addEventListener("keydown", onKey);
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") invoke("hide_popup");
-  });
   // her açılışta formu sıfırla → yerine: durumu SAKLA
   // (arama sorgusu + sonuçlar kapanınca korunur; yeniden açınca aynı kalır)
   window.addEventListener("focus", () => {

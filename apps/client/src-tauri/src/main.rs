@@ -327,6 +327,19 @@ fn hide_popup(app: AppHandle) {
     if let Some(win) = app.get_webview_window("search") {
         let _ = win.hide();
     }
+    // Esc ile kapanınca odak popup açılmadan önceki pencereye dönsün.
+    // Süreçimiz az önce foreground'du; restore izinlidir.
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::HWND;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+        let h = TARGET_WINDOW.load(Ordering::SeqCst);
+        if h != 0 {
+            unsafe {
+                SetForegroundWindow(h as HWND);
+            }
+        }
+    }
 }
 
 /// Popup açıkken kapat, kapalıyken imlecin yanına getirip göster (toggle).
