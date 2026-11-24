@@ -341,7 +341,45 @@ fn toggle_popup(app: &AppHandle) {
     capture_target_window();
     place_near_cursor(&win);
     let _ = win.show();
+    // Windows foreground kilidi: arka plan süreci show()+set_focus() ile odak
+    // alamaz; pencere görünür ama klavye eski uygulamaya gider. Aktive etmek
+    // için ALT simülasyonu + AttachThreadInput gerekli.
+    #[cfg(windows)]
+    if let Ok(h) = win.hwnd() {
+        force_foreground(h.0);
+    }
     let _ = win.set_focus();
+}
+
+/// Pencereyi gerçekten öne getirir: Windows yalnız kullanıcı girdisi yapan
+/// sürece foreground verir. Yapay ALT tuşu bu kilidi aşar; AttachThreadInput
+/// da o anki foreground sürecinin giriş kuyruğuna bağlanıp SetForegroundWindow'i
+/// garanti eder.
+#[cfg(windows)]
+fn force_foreground(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_KEYUP, VK_MENU};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, SetForegroundWindow,
+    };
+
+    unsafe {
+        let fg: HWND = GetForegroundWindow();
+        let mut fg_pid = 0u32;
+        let fg_tid = GetWindowThreadProcessId(fg, &mut fg_pid);
+        let our_tid = GetCurrentThreadId();
+        let attached =
+            fg_tid != 0 && fg_tid != our_tid && AttachThreadInput(our_tid, fg_tid, 1) != 0;
+        // Foreground kilidi ALT girdisi ile aşılır (klasik XP devri kalıntısı).
+        keybd_event(VK_MENU as u8, 0, 0, 0);
+        keybd_event(VK_MENU as u8, 0, KEYEVENTF_KEYUP, 0);
+        SetForegroundWindow(hwnd);
+        BringWindowToTop(hwnd);
+        if attached {
+            AttachThreadInput(our_tid, fg_tid, 0);
+        }
+    }
 }
 
 /// Sistem tepsisi: pencere görünmese de uygulama yaşar, tepside ikon + menü.

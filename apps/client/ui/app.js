@@ -81,6 +81,7 @@ async function apiGet(path) {
     res = await fetch(api() + path, {
       headers: { Authorization: "Bearer " + settings.token },
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
     });
   } catch (e) {
     throw new Error("sunucuya erişilemedi: " + (e && e.message ? e.message : "?"));
@@ -108,6 +109,7 @@ async function apiBlob(path) {
     res = await fetch(api() + path, {
       headers: { Authorization: "Bearer " + settings.token },
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
     });
   } catch (e) {
     throw new Error("sunucuya erişilemedi: " + (e && e.message ? e.message : "?"));
@@ -164,6 +166,7 @@ async function connectWithPat(server, token) {
       res = await fetch(server + "/api/auth/me", {
         headers: { Authorization: "Bearer " + token },
         cache: "no-store",
+        signal: AbortSignal.timeout(8000),
       });
     } catch (e) {
       throw new Error("sunucuya erişilemedi: " + (e && e.message ? e.message : "?"));
