@@ -19,7 +19,7 @@ use axum::Router;
 use state::{AppState, SharedState};
 use std::net::SocketAddr;
 use std::str::FromStr;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -301,10 +301,13 @@ fn build_router(state: SharedState, cfg: &config::Config) -> Router {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
+    // Masaüstü istemci (Tauri) webview'i farklı origin'den istek atar:
+    // http(s)://tauri.localhost (Windows/WebView2) veya tauri://localhost
+    // (macOS/Linux). Panel aynı origin'de olduğundan etkilenmez.
     let app = if cfg.server.cors_allow_all {
         app.layer(CorsLayer::permissive())
     } else {
-        app
+        app.layer(tauri_cors())
     };
 
     let dist = std::path::PathBuf::from(&cfg.panel.dist);
@@ -314,6 +317,20 @@ fn build_router(state: SharedState, cfg: &config::Config) -> Router {
     } else {
         app.fallback(no_panel)
     }
+}
+
+/// Tauri istemci origin'leri için kısıtlı CORS katmanı.
+fn tauri_cors() -> CorsLayer {
+    const ORIGINS: [&str; 3] = [
+        "http://tauri.localhost",   // Tauri v2 Windows (WebView2)
+        "https://tauri.localhost",  // Tauri v1 Windows
+        "tauri://localhost",        // macOS / Linux
+    ];
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(ORIGINS.map(|o| o.parse().unwrap())))
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .max_age(std::time::Duration::from_secs(86400))
 }
 
 async fn health() -> Response {
