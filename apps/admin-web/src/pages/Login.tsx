@@ -27,6 +27,7 @@ export default function Login() {
     <div className="h-full flex items-center justify-center bg-slate-950">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
+          <img src="/logo.png" alt="Vardrop" className="h-16 w-16 mx-auto mb-3 rounded-xl" />
           <h1 className="text-2xl font-semibold text-white tracking-tight">Registry Admin</h1>
           <p className="text-sm text-slate-500 mt-1">Vardrop</p>
         </div>

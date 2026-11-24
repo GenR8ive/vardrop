@@ -18,9 +18,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell flex">
       <aside className="app-sidebar w-56 shrink-0 bg-white border-r border-slate-800 flex flex-col">
-        <div className="px-4 py-4 border-b border-slate-800">
-          <div className="text-base font-semibold tracking-tight text-white">Vardrop</div>
-          <div className="text-xs text-slate-500 mt-0.5">Registry</div>
+        <div className="px-4 py-4 border-b border-slate-800 flex items-center gap-2.5">
+          <img src="/logo.png" alt="Vardrop" className="h-7 w-7 rounded-md" />
+          <div>
+            <div className="text-base font-semibold tracking-tight text-white leading-tight">Vardrop</div>
+            <div className="text-xs text-slate-500">Registry</div>
+          </div>
         </div>
         <nav className="flex-1 p-2 space-y-1">
           {navItems.map((n) => (

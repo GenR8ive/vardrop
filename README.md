@@ -1,5 +1,9 @@
 # Vardrop
 
+<p align="center">
+  <img src="apps/admin-web/public/logo.png" width="160" alt="Vardrop logo" />
+</p>
+
 Self-hosted registry for the text you retype all day: connection strings, API keys,
 prompt snippets, agent skills, images, and file bundles.
 
