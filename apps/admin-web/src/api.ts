@@ -4,11 +4,16 @@ import type {
   AuditRow,
   ClusterCard,
   CreatedToken,
+  DepartmentInfo,
+  DepartmentMember,
   EntryDetail,
   EntrySummary,
   FileInfo,
+  GrantInfo,
   GroupNode,
   LoginResponse,
+  PermsSummary,
+  RoleDef,
   SearchResponse,
   TokenInfo,
   User,
@@ -296,5 +301,71 @@ export const Api = {
       if (v !== undefined && v !== null && v !== "") p.set(k, String(v));
     });
     return request(`/api/audit?${p.toString()}`);
+  },
+
+  // ---------- RBAC: roller / departmanlar / atamalar ----------
+  myPerms(): Promise<PermsSummary> {
+    return request("/api/auth/perms");
+  },
+  listRoles(): Promise<RoleDef[]> {
+    return request("/api/roles");
+  },
+  createRole(name: string, description: string, permissions: string[]): Promise<RoleDef> {
+    return request("/api/roles", {
+      method: "POST",
+      body: JSON.stringify({ name, description, permissions }),
+    });
+  },
+  patchRole(id: string, patch: { description?: string; permissions?: string[] }): Promise<{ ok: boolean }> {
+    return request(`/api/roles/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  },
+  deleteRole(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/roles/${id}`, { method: "DELETE" });
+  },
+  listDepartments(): Promise<DepartmentInfo[]> {
+    return request("/api/departments");
+  },
+  createDepartment(name: string, description: string): Promise<DepartmentInfo> {
+    return request("/api/departments", {
+      method: "POST",
+      body: JSON.stringify({ name, description }),
+    });
+  },
+  patchDepartment(id: string, patch: { name?: string; description?: string }): Promise<{ ok: boolean }> {
+    return request(`/api/departments/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  },
+  deleteDepartment(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/departments/${id}`, { method: "DELETE" });
+  },
+  listMembers(deptId: string): Promise<DepartmentMember[]> {
+    return request(`/api/departments/${deptId}/members`);
+  },
+  addMember(deptId: string, userId: string): Promise<{ ok: boolean }> {
+    return request(`/api/departments/${deptId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId }),
+    });
+  },
+  removeMember(deptId: string, userId: string): Promise<{ ok: boolean }> {
+    return request(`/api/departments/${deptId}/members/${userId}`, { method: "DELETE" });
+  },
+  listGrants(params?: { subject_type?: string; subject_id?: string }): Promise<GrantInfo[]> {
+    const p = new URLSearchParams();
+    Object.entries(params ?? {}).forEach(([k, v]) => {
+      if (v) p.set(k, String(v));
+    });
+    const qs = p.toString();
+    return request(`/api/grants${qs ? `?${qs}` : ""}`);
+  },
+  createGrant(body: {
+    subject_type: string;
+    subject_id: string;
+    role_id: string;
+    cluster_id?: string | null;
+  }): Promise<{ ok: boolean; id: number }> {
+    return request("/api/grants", { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteGrant(id: number): Promise<{ ok: boolean }> {
+    return request(`/api/grants/${id}`, { method: "DELETE" });
   },
 };

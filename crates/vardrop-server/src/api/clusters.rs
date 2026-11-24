@@ -1,13 +1,13 @@
 //! Cluster CRUD + kart listesi (Concept ekranı).
 
-use crate::auth::middleware::{require, AuthUser};
+use crate::auth::middleware::{require_cluster_perm, require_perm, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::SharedState;
 use crate::util::audit;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::get;use axum::{Json, Router};
-use vardrop_core::{new_id, now_ms, ClusterCard, GroupChip, Scope};
+use vardrop_core::{new_id, now_ms, ClusterCard, GroupChip};
 use serde::Deserialize;
 use sqlx::Row;
 
@@ -29,9 +29,8 @@ struct ClusterRow {
     entries_count: i64,
 }
 
-/// GET /api/clusters — Concept kartları
+/// GET /api/clusters — Concept kartları (yalnız entry.view yetkisi olanlar)
 pub async fn list(user: AuthUser, State(state): State<SharedState>) -> ApiResult<Json<Vec<ClusterCard>>> {
-    require(&user, Scope::Read)?;
     let rows: Vec<ClusterRow> = sqlx::query_as(
         "SELECT c.id, c.name, c.slug, c.description, c.color, c.created_at,
                 (SELECT COUNT(*) FROM groups g WHERE g.cluster_id = c.id) AS groups_count,
@@ -40,6 +39,12 @@ pub async fn list(user: AuthUser, State(state): State<SharedState>) -> ApiResult
     )
     .fetch_all(&state.db)
     .await?;
+
+    // RBAC: yalnız görme yetkisi olan cluster kartları döner.
+    let rows: Vec<ClusterRow> = rows
+        .into_iter()
+        .filter(|r| user.perms.can_on(&r.id, "entry.view"))
+        .collect();
 
     // grup chipleri: entry sayısıyla birlikte
     let g_rows = sqlx::query(
@@ -128,7 +133,8 @@ pub async fn create(
     State(state): State<SharedState>,
     Json(req): Json<CreateClusterReq>,
 ) -> ApiResult<(StatusCode, Json<ClusterCard>)> {
-    require(&user, Scope::Write)?;
+    // cluster oluşturma global eylem: yalnız global cluster.manage
+    require_perm(&user, "cluster.manage")?;
     let name = req.name.trim();
     if name.is_empty() {
         return Err(ApiError::bad("cluster adı gerekli"));
@@ -169,7 +175,7 @@ pub async fn create(
 
 /// GET /api/clusters/{id}
 pub async fn get_one(user: AuthUser, State(state): State<SharedState>, Path(id): Path<String>) -> ApiResult<Json<ClusterCard>> {
-    require(&user, Scope::Read)?;
+    require_cluster_perm(&user, &id, "entry.view")?;
     let row: Option<ClusterRow> = sqlx::query_as(
         "SELECT c.id, c.name, c.slug, c.description, c.color, c.created_at,
                 (SELECT COUNT(*) FROM groups g WHERE g.cluster_id = c.id) AS groups_count,
@@ -224,7 +230,7 @@ pub async fn update(
     Path(id): Path<String>,
     Json(req): Json<PatchClusterReq>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require(&user, Scope::Write)?;
+    require_cluster_perm(&user, &id, "cluster.manage")?;
     if let Some(n) = req.name.as_deref() {
         if n.trim().is_empty() {
             return Err(ApiError::bad("cluster adı boş olamaz"));
@@ -250,7 +256,7 @@ pub async fn delete_cluster(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require(&user, Scope::Write)?;
+    require_cluster_perm(&user, &id, "cluster.manage")?;
     let entry_ids: Vec<String> =
         sqlx::query("SELECT id FROM entries WHERE cluster_id = ?").bind(&id).fetch_all(&state.db).await?
             .into_iter().map(|r: sqlx::sqlite::SqliteRow| r.get::<String, _>("id")).collect();
@@ -269,7 +275,7 @@ pub async fn groups_tree(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<vardrop_core::GroupNode>>> {
-    require(&user, Scope::Read)?;
+    require_cluster_perm(&user, &id, "entry.view")?;
     // ağaç verisi groups.rs'ten geliyor
     let tree = crate::api::groups::tree_for_cluster(&user, &state, &id).await?;
     Ok(Json(tree))

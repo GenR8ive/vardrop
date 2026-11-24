@@ -1,14 +1,14 @@
 //! Entry CRUD + versiyonlar + restore.
 
 use crate::api::values::CreateEntryReq;
-use crate::auth::middleware::{require, AuthUser};
+use crate::auth::middleware::{require_cluster_perm, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::SharedState;
 use crate::util::{audit, group_paths_of, parse_tags, subtree_group_ids};
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use vardrop_core::{now_ms, EntryDetail, EntrySummary, FileInfo, Scope, VersionInfo};
+use vardrop_core::{now_ms, EntryDetail, EntrySummary, FileInfo, VersionInfo};
 use serde::Deserialize;
 use sqlx::Row;
 
@@ -163,7 +163,8 @@ pub async fn get_one(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<EntryDetail>> {
-    require(&user, Scope::Read)?;
+    let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.view")?;
     Ok(Json(detail_of(&user, &state, &id).await?))
 }
 
@@ -237,7 +238,34 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> ApiResult<Json<vardrop_core::SearchResponse>> {
     let started = std::time::Instant::now();
-    require(&user, Scope::Read)?;
+
+    // RBAC: yalnız entry.view yetkisi olan cluster'larda arama yapılır.
+    let allowed: Vec<String> = {
+        let mut set: Vec<String> = user
+            .perms
+            .clusters
+            .iter()
+            .filter(|(_, ps)| ps.contains("entry.view"))
+            .map(|(cid, _)| cid.clone())
+            .collect();
+        if user.perms.can("entry.view") {
+            // global yetki: kısıt yok
+            Vec::new()
+        } else {
+            set.sort();
+            set.dedup();
+            set
+        }
+    };
+    if !user.perms.can("entry.view") && allowed.is_empty() {
+        // hiçbir cluster'da görme yetkisi yok
+        return Ok(Json(vardrop_core::SearchResponse {
+            results: vec![],
+            total: 0,
+            took_ms: started.elapsed().as_millis() as u64,
+        }));
+    }
+    let global_view = allowed.is_empty();
 
     // group_id filtresi alt ağaçla genişler: __GROUP__ yerine IN (...) eklenir
     let mut group_ids: Option<Vec<String>> = None;
@@ -321,6 +349,15 @@ pub async fn list(
 
     let limit = p.limit.unwrap_or(50).clamp(1, 200);
 
+    // RBAC: cluster filtresi — global yetki yoksa izinli listeye daralt.
+    if !global_view {
+        let in_list = vec!["?"; allowed.len()].join(",");
+        where_sql.push_str(&format!(" AND e.cluster_id IN ({in_list})"));
+        for cid in &allowed {
+            binds.push(SqlBind::S(cid.clone()));
+        }
+    }
+
     // toplam
     const FROM_JOINED: &str = " FROM entries e JOIN groups g ON g.id = e.group_id JOIN clusters c ON c.id = e.cluster_id";
     let count_sql = format!("SELECT COUNT(*) AS c{FROM_JOINED}{where_sql}");
@@ -382,7 +419,7 @@ pub async fn list(
         }
     }
 
-    let admin = matches!(vardrop_core::Role::parse(&user.user.role), Some(vardrop_core::Role::Admin));
+    let can_secret = user.perms.can("secret.read");
     let mut results = Vec::with_capacity(rows.len());
     for r in rows {
         let vrow = preview_map.get(&r.id);
@@ -396,7 +433,7 @@ pub async fn list(
             &state,
             &r.kind,
             r.is_secret,
-            admin,
+            can_secret,
             vrow,
             file_count,
             is_image,
@@ -463,8 +500,8 @@ pub async fn patch(
     Path(id): Path<String>,
     Json(req): Json<PatchEntryReq>,
 ) -> ApiResult<Json<EntryDetail>> {
-    require(&user, Scope::Write)?;
     let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.edit")?;
 
     if let Some(n) = req.name.as_deref() {
         let n = n.trim();
@@ -553,8 +590,8 @@ pub async fn del(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require(&user, Scope::Write)?;
     let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.delete")?;
     crate::storage::remove_entry_blobs(&state, &entry.id).await;
     sqlx::query("DELETE FROM entries WHERE id = ?").bind(&entry.id).execute(&state.db).await?;
     audit(&state.db, Some(user.uid()), "entry.delete", Some(&entry.id), None, None,
@@ -568,8 +605,8 @@ pub async fn list_versions(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Vec<VersionInfo>>> {
-    require(&user, Scope::Read)?;
-    fetch_entry(&state.db, &id).await?;
+    let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.view")?;
     let rows = sqlx::query(
         "SELECT v.version,
                 v.size, v.value_hash, v.created_by, v.created_at,
@@ -598,8 +635,8 @@ pub async fn restore(
     State(state): State<SharedState>,
     Path((id, version)): Path<(String, i64)>,
 ) -> ApiResult<Json<EntryDetail>> {
-    require(&user, Scope::Write)?;
     let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.edit")?;
     if version == entry.current_version {
         return Err(ApiError::bad("bu versiyon zaten güncel"));
     }

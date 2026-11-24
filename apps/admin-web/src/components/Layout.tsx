@@ -3,17 +3,20 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { FeedbackProvider } from "./Feedback";
 import InstallButton from "./InstallButton";
+import { usePerms } from "../perms";
 
 const navItems = [
-  { to: "/", label: "Concept", end: true },
-  { to: "/tokens", label: "Tokenlar" },
-  { to: "/users", label: "Users" },
-  { to: "/audit", label: "Audit" },
+  { to: "/", label: "Concept", end: true, perm: null },
+  { to: "/tokens", label: "Tokenlar", perm: null },
+  { to: "/users", label: "Users", perm: "users.manage" },
+  { to: "/access", label: "Erişim", perm: "roles.manage" },
+  { to: "/audit", label: "Audit", perm: "audit.read" },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { can } = usePerms();
 
   return (
     <div className="app-shell flex">
@@ -26,7 +29,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="flex-1 p-2 space-y-1">
-          {navItems.map((n) => (
+          {navItems
+            .filter((n) => !n.perm || can(n.perm))
+            .map((n) => (
             <NavLink
               key={n.to}
               to={n.to}

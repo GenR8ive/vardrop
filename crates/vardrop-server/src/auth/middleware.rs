@@ -1,17 +1,76 @@
-//! Bearer token doğrulama extractor'ı + rol/kapsam yardımcıları.
+//! Bearer token doğrulama extractor'ı + yetki (RBAC) yardımcıları.
 
 use crate::error::{ApiError, ApiResult};
 use crate::state::SharedState;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use vardrop_core::{Role, Scope, User};
+use vardrop_core::{Scope, User};
 use sqlx::Row;
+use std::collections::{HashMap, HashSet};
 
 #[allow(dead_code)] // token_id ileride debug/header bilgisi için
 pub struct AuthUser {
     pub user: User,
     pub scopes: Vec<Scope>,
     pub token_id: String,
+    /// RBAC: etkin yetkiler (kendi + departman grant'ları).
+    pub perms: Perms,
+}
+
+/// Kullanıcının etkin yetkileri: global küme + cluster başına kümeler.
+#[derive(Debug, Default, Clone)]
+pub struct Perms {
+    pub global: HashSet<String>,
+    pub clusters: HashMap<String, HashSet<String>>,
+}
+
+impl Perms {
+    /// Global yetki (users.manage gibi yalnız-global anahtarlar dahil).
+    pub fn can(&self, p: &str) -> bool {
+        self.global.contains(p)
+    }
+
+    /// Cluster'a özgü yetki: global küme ∪ o cluster'ın kümesi.
+    pub fn can_on(&self, cluster_id: &str, p: &str) -> bool {
+        self.can(p)
+            || self
+                .clusters
+                .get(cluster_id)
+                .map(|s| s.contains(p))
+                .unwrap_or(false)
+    }
+}
+
+/// Kullanıcının grant'larını (bireysel + departman) yükleyip Perms üretir.
+pub async fn load_perms(db: &sqlx::SqlitePool, uid: &str) -> Perms {
+    let mut perms = Perms::default();
+    let rows = sqlx::query(
+        "SELECT g.cluster_id, r.permissions
+         FROM grants g JOIN roles r ON r.id = g.role_id
+         WHERE (g.subject_type = 'user' AND g.subject_id = ?1)
+            OR (g.subject_type = 'department' AND g.subject_id IN
+                (SELECT department_id FROM department_members WHERE user_id = ?1))",
+    )
+    .bind(uid)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    for r in rows {
+        let cluster_id: Option<String> = r.get("cluster_id");
+        let raw: String = r.get("permissions");
+        let list: Vec<String> = serde_json::from_str(&raw).unwrap_or_default();
+        let target = match cluster_id.as_deref() {
+            None | Some("") => &mut perms.global,
+            Some(cid) => perms.clusters.entry(cid.to_string()).or_default(),
+        };
+        for p in list {
+            if vardrop_core::valid_permission(&p) {
+                target.insert(p);
+            }
+        }
+    }
+    perms
 }
 
 impl FromRequestParts<SharedState> for AuthUser {
@@ -78,7 +137,9 @@ impl FromRequestParts<SharedState> for AuthUser {
             .execute(&state.db)
             .await;
 
-        Ok(AuthUser { user, scopes, token_id })
+        let perms = load_perms(&state.db, &user.id).await;
+
+        Ok(AuthUser { user, scopes, token_id, perms })
     }
 }
 
@@ -95,24 +156,27 @@ pub(crate) fn user_from_row(r: &sqlx::sqlite::SqliteRow, uid_col: &str) -> User 
     }
 }
 
-/// Kapsam kontrolü: tokenda yoksa 403.
-pub fn require(auth: &AuthUser, scope: Scope) -> ApiResult<()> {
-    if auth.scopes.contains(&scope) {
+/// Global yetki kontrolü (users.manage, roles.manage, audit.read gibi).
+pub fn require_perm(auth: &AuthUser, perm: &str) -> ApiResult<()> {
+    if auth.perms.can(perm) {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden(format!("gerekli yetki: {perm}")))
+    }
+}
+
+/// Cluster'a özgü yetki kontrolü: global küme ∪ cluster kümesi.
+pub fn require_cluster_perm(auth: &AuthUser, cluster_id: &str, perm: &str) -> ApiResult<()> {
+    if auth.perms.can_on(cluster_id, perm) {
         Ok(())
     } else {
         Err(ApiError::forbidden(format!(
-            "gerekli kapsam: {}",
-            scope.as_str()
+            "bu cluster için gerekli yetki: {perm}"
         )))
     }
 }
 
-/// Admin kontrolü.
+/// Admin kontrolü (geriye uyumlu; eski çağrı noktaları).
 pub fn require_admin(auth: &AuthUser) -> ApiResult<()> {
-    let role = Role::parse(&auth.user.role).unwrap_or(Role::Viewer);
-    if role == Role::Admin && auth.scopes.contains(&Scope::Admin) {
-        Ok(())
-    } else {
-        Err(ApiError::forbidden("bu işlem yalnız admin içindir"))
-    }
+    require_perm(auth, "users.manage")
 }

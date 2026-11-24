@@ -41,6 +41,55 @@ pub struct CreatedToken {
     pub token: String,
 }
 
+// ---------- RBAC: roller, departmanlar, atamalar ----------
+
+/// Rol grubu: yetki anahtarı kümesi + metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoleDef {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub permissions: Vec<String>,
+    pub is_system: bool,
+    pub created_at: i64,
+}
+
+/// Departman (kullanıcı grubu); üyeleri departmanın atamalarını miras alır.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepartmentInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub member_count: i64,
+    pub created_at: i64,
+}
+
+/// Yetki ataması: (kullanıcı|departman) × rol × cluster (boş = global).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrantInfo {
+    pub id: i64,
+    pub subject_type: String,
+    pub subject_id: String,
+    /// Görünüm kolaylığı: subject adı (kullanıcı adı / departman adı).
+    pub subject_name: String,
+    pub role_id: String,
+    pub role_name: String,
+    /// None = global (tüm cluster'larda geçerli).
+    pub cluster_id: Option<String>,
+    pub cluster_name: Option<String>,
+    pub permissions: Vec<String>,
+    pub created_at: i64,
+}
+
+/// GET /api/auth/perms — kullanıcının etkin yetkileri (panel menü kapısı).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PermsSummary {
+    pub global: Vec<String>,
+    /// cluster_id → o cluster'a özgü ek yetkiler.
+    pub clusters: std::collections::HashMap<String, Vec<String>>,
+}
+
+
 // ---------- Cluster / Group ----------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

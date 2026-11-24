@@ -1,6 +1,6 @@
-//! Audit listesi (yalnız admin).
+//! Audit listesi (audit.read yetkisi).
 
-use crate::auth::middleware::{require_admin, AuthUser};
+use crate::auth::middleware::{require_perm, AuthUser};
 use crate::error::ApiResult;
 use crate::state::SharedState;
 use axum::extract::{Query, State};
@@ -30,7 +30,7 @@ pub async fn list(
     State(state): State<SharedState>,
     Query(p): Query<AuditParams>,
 ) -> ApiResult<Json<Vec<AuditRow>>> {
-    require_admin(&user)?;
+    require_perm(&user, "audit.read")?;
 
     let mut sql = String::from(
         "SELECT id, user_id, username, action, resource, ip, detail, created_at FROM audit_log WHERE 1=1",

@@ -123,6 +123,7 @@ async fn init(cfg_path: &str, admin_user: Option<String>) -> Result<()> {
     let key = crypto::load_or_create_master_key(&cfg.security.master_key_file)?;
     let pool = open_db(&cfg).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
+    ensure_user_grants(&pool).await;
     println!("[init] veritabanı hazır: {}", cfg.data.database);
     // İlk admin kullanıcısı (yoksa) — rastgele şifre üret, yalnızca bir kez göster.
     let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE role = 'admin'")
@@ -254,6 +255,7 @@ async fn serve(cfg_path: &str) -> Result<()> {
     let key = crypto::load_or_create_master_key(&cfg.security.master_key_file)?;
     let pool = open_db(&cfg).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
+    ensure_user_grants(&pool).await;
 
     let state: SharedState = std::sync::Arc::new(AppState {
         db: pool,
@@ -280,8 +282,25 @@ fn std_path_parent(p: &str) -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
-async fn open_db(cfg: &config::Config) -> Result<sqlx::SqlitePool> {
-    let opts = sqlx::sqlite::SqliteConnectOptions::from_str(&cfg.sqlite_url())?
+/// users.role ↔ global grant değişmezi: CLI init / geçmiş kurulumlarda grant
+/// satırı oluşmamış olabilir (migration eski kullanıcıları tohumlar; sonradan
+/// açılan hesaplar için burada telafi edilir). Idempotent.
+async fn ensure_user_grants(pool: &sqlx::SqlitePool) {
+    let _ = sqlx::query(
+        "INSERT OR IGNORE INTO grants (subject_type, subject_id, role_id, cluster_id, created_at)
+         SELECT 'user', u.id,
+                CASE u.role WHEN 'admin' THEN 'role_admin'
+                            WHEN 'editor' THEN 'role_editor'
+                            ELSE 'role_viewer' END,
+                NULL, ?
+         FROM users u",
+    )
+    .bind(vardrop_core::now_ms())
+    .execute(pool)
+    .await;
+}
+
+async fn open_db(cfg: &config::Config) -> Result<sqlx::SqlitePool> {    let opts = sqlx::sqlite::SqliteConnectOptions::from_str(&cfg.sqlite_url())?
         .create_if_missing(true)
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .foreign_keys(true)

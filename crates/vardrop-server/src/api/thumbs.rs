@@ -4,7 +4,7 @@
 //! secret içerikte cache yok ve okuma PIN/unlock kapısına tabidir.
 
 use crate::api::entries::{fetch_current_version, fetch_entry};
-use crate::auth::middleware::{require, AuthUser};
+use crate::auth::middleware::{require_cluster_perm, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::SharedState;
 use crate::{images, storage, util::audit};
@@ -12,7 +12,6 @@ use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::response::Response;
 use axum::Router;
-use vardrop_core::Scope;
 
 pub fn router() -> Router<SharedState> {
     Router::new().route(
@@ -28,8 +27,12 @@ async fn thumbnail(
     State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> ApiResult<Response> {
-    require(&user, Scope::Read)?;
     let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.view")?;
+    if entry.is_secret {
+        // görsel secret'lar thumbnail üretmez (zaten maskeli satırda görünür)
+        return Err(ApiError::not_found("bu entry görsel değil"));
+    }
     if entry.kind != "binary" {
         return Err(ApiError::not_found("bu entry görsel değil"));
     }

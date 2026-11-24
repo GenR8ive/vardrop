@@ -1,18 +1,18 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Api } from "../api";
-import { useAuth } from "../auth";
 import type { User } from "../types";
 import { Badge } from "../components/Badges";
 import { btnCls, btnDangerCls, inputCls, labelCls, Modal } from "../components/Modal";
 import { fmtDay } from "../util";
 import { useFeedback } from "../components/Feedback";
+import { usePerms } from "../perms";
 
 const ROLES = ["admin", "editor", "viewer"] as const;
 
 export default function Users() {
   const { notify, confirm } = useFeedback();
-  const { user: me } = useAuth();
-  const isAdmin = me?.role === "admin";
+  const { can } = usePerms();
+  const canManage = can("users.manage");
   const [users, setUsers] = useState<User[]>([]);
   const [modal, setModal] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -21,12 +21,12 @@ export default function Users() {
   const [newPassword, setNewPassword] = useState("");
 
   async function reload() {
-    if (!isAdmin) return;
+    if (!canManage) return;
     setErr(null);
     try {
       setUsers(await Api.listUsers());
     } catch (e: any) {
-      setErr(e?.message ?? "liste alınamadı");
+      setErr(e?.message ?? "liste alÄ±namadÄ±");
     }
   }
 
@@ -43,7 +43,7 @@ export default function Users() {
       setForm({ username: "", password: "", displayName: "", role: "viewer" });
       await reload();
     } catch (e: any) {
-      setErr(e?.message ?? "oluşturulamadı");
+      setErr(e?.message ?? "oluÅŸturulamadÄ±");
     }
   }
 
@@ -52,7 +52,7 @@ export default function Users() {
       await Api.patchUser(u.id, { role });
       await reload();
     } catch (e: any) {
-      notify(e?.message ?? "Rol değiştirilemedi.", "error");
+      notify(e?.message ?? "Rol deÄŸiÅŸtirilemedi.", "error");
     }
   }
 
@@ -61,7 +61,7 @@ export default function Users() {
       await Api.patchUser(u.id, { is_active: !u.is_active });
       await reload();
     } catch (e: any) {
-      notify(e?.message ?? "Kullanıcı durumu değiştirilemedi.", "error");
+      notify(e?.message ?? "KullanÄ±cÄ± durumu deÄŸiÅŸtirilemedi.", "error");
     }
   }
 
@@ -76,24 +76,24 @@ export default function Users() {
     try {
       await Api.patchUser(passwordTarget.id, { password: newPassword });
       setPasswordTarget(null);
-      notify("Şifre güncellendi.", "success");
+      notify("Åifre gÃ¼ncellendi.", "success");
     } catch (e: any) {
-      notify(e?.message ?? "Şifre güncellenemedi.", "error");
+      notify(e?.message ?? "Åifre gÃ¼ncellenemedi.", "error");
     }
   }
 
   async function del(u: User) {
-    if (!(await confirm({ title: "Kullanıcıyı sil", message: `“${u.username}” ve bu hesaba bağlı tüm tokenlar silinecek.`, confirmLabel: "Kullanıcıyı sil", danger: true }))) return;
+    if (!(await confirm({ title: "KullanÄ±cÄ±yÄ± sil", message: `â€œ${u.username}â€ ve bu hesaba baÄŸlÄ± tÃ¼m tokenlar silinecek.`, confirmLabel: "KullanÄ±cÄ±yÄ± sil", danger: true }))) return;
     try {
       await Api.deleteUser(u.id);
       await reload();
     } catch (e: any) {
-      notify(e?.message ?? "Kullanıcı silinemedi.", "error");
+      notify(e?.message ?? "KullanÄ±cÄ± silinemedi.", "error");
     }
   }
 
-  if (!isAdmin) {
-    return <div className="p-8 text-slate-500">Bu sayfa yalnız admin içindir.</div>;
+  if (!canManage) {
+    return <div className="p-8 text-slate-500">Bu sayfa yalnÄ±z admin iÃ§indir.</div>;
   }
 
   return (
@@ -101,7 +101,7 @@ export default function Users() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-white">Users</h1>
         <button className={btnCls} onClick={() => setModal(true)}>
-          ＋ New User
+          ï¼‹ New User
         </button>
       </div>
 
@@ -111,10 +111,10 @@ export default function Users() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500 bg-slate-900/60">
-              <th className="px-4 py-2 font-medium">Kullanıcı</th>
+              <th className="px-4 py-2 font-medium">KullanÄ±cÄ±</th>
               <th className="px-2 py-2 font-medium">Rol</th>
               <th className="px-2 py-2 font-medium">Durum</th>
-              <th className="px-2 py-2 font-medium">Son giriş</th>
+              <th className="px-2 py-2 font-medium">Son giriÅŸ</th>
               <th className="px-2 py-2 font-medium text-right">Aksiyon</th>
             </tr>
           </thead>
@@ -147,10 +147,10 @@ export default function Users() {
                 <td className="px-2 py-2 text-slate-500 text-xs">{fmtDay(u.last_login_at)}</td>
                 <td className="px-2 py-2 text-right whitespace-nowrap">
                   <button className="text-slate-400 hover:text-white text-xs mr-2" onClick={() => toggleActive(u)}>
-                    {u.is_active ? "pasifleştir" : "aktifleştir"}
+                    {u.is_active ? "pasifleÅŸtir" : "aktifleÅŸtir"}
                   </button>
                   <button className="text-slate-400 hover:text-white text-xs mr-2" onClick={() => resetPassword(u)}>
-                    şifre
+                    ÅŸifre
                   </button>
                   <button
                     className="text-slate-500 hover:text-rose-600 text-xs"
@@ -165,7 +165,7 @@ export default function Users() {
             {users.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-10 text-center text-slate-600">
-                  kullanıcı yok
+                  kullanÄ±cÄ± yok
                 </td>
               </tr>
             )}
@@ -173,10 +173,10 @@ export default function Users() {
         </table>
       </div>
 
-      <Modal open={modal} title="Yeni Kullanıcı" onClose={() => setModal(false)}>
+      <Modal open={modal} title="Yeni KullanÄ±cÄ±" onClose={() => setModal(false)}>
         <form onSubmit={create} className="space-y-3">
           <div>
-            <label className={labelCls}>Kullanıcı adı</label>
+            <label className={labelCls}>KullanÄ±cÄ± adÄ±</label>
             <input
               className={inputCls}
               value={form.username}
@@ -185,7 +185,7 @@ export default function Users() {
             />
           </div>
           <div>
-            <label className={labelCls}>Şifre</label>
+            <label className={labelCls}>Åifre</label>
             <input
               type="password"
               className={inputCls}
@@ -194,7 +194,7 @@ export default function Users() {
             />
           </div>
           <div>
-            <label className={labelCls}>Görünen ad (opsiyonel)</label>
+            <label className={labelCls}>GÃ¶rÃ¼nen ad (opsiyonel)</label>
             <input
               className={inputCls}
               value={form.displayName}
@@ -223,22 +223,22 @@ export default function Users() {
           {err && <div className="text-xs text-rose-600">{err}</div>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="text-slate-300 text-sm px-3" onClick={() => setModal(false)}>
-              İptal
+              Ä°ptal
             </button>
-            <button className={btnCls}>Oluştur</button>
+            <button className={btnCls}>OluÅŸtur</button>
           </div>
         </form>
       </Modal>
-      <Modal open={!!passwordTarget} title={`Şifreyi sıfırla · ${passwordTarget?.username ?? ""}`} onClose={() => setPasswordTarget(null)}>
+      <Modal open={!!passwordTarget} title={`Åifreyi sÄ±fÄ±rla Â· ${passwordTarget?.username ?? ""}`} onClose={() => setPasswordTarget(null)}>
         <form onSubmit={savePassword} className="space-y-4">
           <div>
-            <label className={labelCls}>Yeni şifre</label>
+            <label className={labelCls}>Yeni ÅŸifre</label>
             <input type="password" className={inputCls} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={10} autoFocus />
             <p className="mt-1.5 text-xs text-slate-500">En az 10 karakter.</p>
           </div>
           <div className="flex justify-end gap-2">
-            <button type="button" className="text-slate-500 text-sm px-3" onClick={() => setPasswordTarget(null)}>Vazgeç</button>
-            <button className={btnCls} disabled={newPassword.length < 10}>Şifreyi güncelle</button>
+            <button type="button" className="text-slate-500 text-sm px-3" onClick={() => setPasswordTarget(null)}>VazgeÃ§</button>
+            <button className={btnCls} disabled={newPassword.length < 10}>Åifreyi gÃ¼ncelle</button>
           </div>
         </form>
       </Modal>

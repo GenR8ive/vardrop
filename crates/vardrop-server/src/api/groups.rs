@@ -1,13 +1,13 @@
 //! Grup işlemleri: ağaç, oluştur, tasi/yeniden adlandır, sil (cascade).
 
-use crate::auth::middleware::{require, AuthUser};
+use crate::auth::middleware::{require_cluster_perm, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::SharedState;
 use crate::util::{audit, subtree_group_ids};
 use axum::extract::{Path, Query, State};
 use axum::routing::post;
 use axum::{Json, Router};
-use vardrop_core::{new_id, GroupNode, Scope};
+use vardrop_core::{new_id, GroupNode};
 use serde::Deserialize;
 use sqlx::Row;
 
@@ -41,7 +41,7 @@ pub async fn create_group(
     Path(cluster_id): Path<String>,
     Json(req): Json<CreateGroupReq>,
 ) -> ApiResult<(axum::http::StatusCode, Json<GroupNode>)> {
-    require(&user, Scope::Write)?;
+    require_cluster_perm(&user, &cluster_id, "cluster.manage")?;
     let name = req.name.trim().to_string();
     if name.is_empty() {
         return Err(ApiError::bad("grup adı gerekli"));
@@ -187,8 +187,8 @@ pub async fn update_group(
     Path(id): Path<String>,
     Json(req): Json<PatchGroupReq>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require(&user, Scope::Write)?;
     let g = fetch_group(&state.db, &id).await?;
+    require_cluster_perm(&user, &g.cluster_id, "cluster.manage")?;
 
     if let Some(name) = req.name.as_deref() {
         let name = name.trim();
@@ -243,8 +243,8 @@ pub async fn delete_group(
     Path(id): Path<String>,
     Query(opts): Query<DeleteOpts>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require(&user, Scope::Write)?;
     let g = fetch_group(&state.db, &id).await?;
+    require_cluster_perm(&user, &g.cluster_id, "cluster.manage")?;
 
     let counts: (i64, i64) = sqlx::query_as(
         "SELECT

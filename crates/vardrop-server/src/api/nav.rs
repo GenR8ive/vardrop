@@ -1,13 +1,13 @@
 //! GET /api/nav — popup istemcisinin boş-durumu (grup ağacıyla gezinme).
 //! Tek çağrı: klusterler + tam grup hiyerarşisi + alt ağaç değişken sayıları.
 
-use crate::auth::middleware::{require, AuthUser};
+use crate::auth::middleware::AuthUser;
 use crate::error::ApiResult;
 use crate::state::SharedState;
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
-use vardrop_core::{GroupNode, NavCluster, Scope};
+use vardrop_core::{GroupNode, NavCluster};
 use sqlx::Row;
 
 pub fn router() -> Router<SharedState> {
@@ -24,13 +24,20 @@ struct GRow {
 }
 
 pub async fn nav(user: AuthUser, State(state): State<SharedState>) -> ApiResult<Json<Vec<NavCluster>>> {
-    require(&user, Scope::Read)?;
-
     let c_rows = sqlx::query(
         "SELECT id, name, slug, color FROM clusters ORDER BY name COLLATE NOCASE",
     )
     .fetch_all(&state.db)
     .await?;
+
+    // RBAC: istemci yalnız entry.view yetkisi olan cluster'ları görür.
+    let c_rows: Vec<_> = c_rows
+        .into_iter()
+        .filter(|c| {
+            let cid: String = c.get("id");
+            user.perms.can_on(&cid, "entry.view")
+        })
+        .collect();
 
     let grows: Vec<GRow> = sqlx::query_as(
         "SELECT g.id AS id, g.cluster_id AS cluster_id, g.parent_id AS parent_id, g.name AS name,

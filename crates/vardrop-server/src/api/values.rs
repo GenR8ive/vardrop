@@ -1,7 +1,7 @@
 //! İçerik (value/dosya) depolama, servis etme, yüklerme; create_entry + versiyon mantığı.
 
 use crate::api::entries::{bundle_files_of, detail_of, fetch_current_version, fetch_entry, FileRow, VersionRow};
-use crate::auth::middleware::{require, AuthUser};
+use crate::auth::middleware::{require_cluster_perm, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::state::SharedState;
 use crate::{crypto, storage, util::audit};
@@ -10,7 +10,7 @@ use axum::extract::{Multipart, Path, Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use axum::Router;
-use vardrop_core::{new_id, now_ms, FileInfo, Scope};
+use vardrop_core::{new_id, now_ms, FileInfo};
 use serde::Deserialize;
 
 pub fn router() -> Router<SharedState> {
@@ -234,7 +234,7 @@ pub(crate) async fn create_entry(
     user: &AuthUser,
     req: CreateEntryReq,
 ) -> ApiResult<(axum::http::StatusCode, axum::Json<vardrop_core::EntryDetail>)> {
-    require(user, Scope::Write)?;
+    require_cluster_perm(user, &req.cluster_id, "entry.create")?;
     let kind = vardrop_core::ContentKind::parse(&req.kind)
         .ok_or_else(|| ApiError::bad("geçersiz kind (text|json|yaml|binary|bundle)"))?;
     let name = req.name.trim().to_string();
@@ -407,8 +407,12 @@ pub async fn get_value(
     Path(id): Path<String>,
     Query(q): Query<ValueQuery>,
 ) -> ApiResult<Response> {
-    require(&user, Scope::Read)?;
     let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.view")?;
+    // secret içerik: cluster bazlı secret.read + (varsa) PIN penceresi
+    if entry.is_secret {
+        require_cluster_perm(&user, &entry.cluster_id, "secret.read")?;
+    }
     let kind = vardrop_core::ContentKind::parse(&entry.kind).unwrap_or(vardrop_core::ContentKind::Text);
 
     match kind {
@@ -511,8 +515,8 @@ pub async fn upload_file(
     Path(id): Path<String>,
     mut multipart: Multipart,
 ) -> ApiResult<axum::response::Json<vardrop_core::EntryDetail>> {
-    require(&user, Scope::Write)?;
     let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.edit")?;
     let kind = vardrop_core::ContentKind::parse(&entry.kind).unwrap_or(vardrop_core::ContentKind::Text);
     if !kind.is_file_based() {
         return Err(ApiError::bad("dosya yüklemesi yalnız binary/bundle entry'lerde geçerli"));
@@ -641,10 +645,11 @@ pub async fn get_file(
     State(state): State<SharedState>,
     Path((id, fid)): Path<(String, String)>,
 ) -> ApiResult<Response> {
-    require(&user, Scope::Read)?;
-    let _ = fetch_entry(&state.db, &id).await?;
+    let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.view")?;
     let f = fetch_file(&state.db, &id, &fid).await?;
     if f.is_secret {
+        require_cluster_perm(&user, &entry.cluster_id, "secret.read")?;
         crate::auth::require_secret_access(&state, &user).await?;
     }
     let bytes = storage::read_blob(&state, &f.blob_path.unwrap_or_default(), f.is_secret).await?;
@@ -659,8 +664,8 @@ pub async fn remove_file(
     State(state): State<SharedState>,
     Path((id, fid)): Path<(String, String)>,
 ) -> ApiResult<axum::response::Json<vardrop_core::EntryDetail>> {
-    require(&user, Scope::Write)?;
     let entry = fetch_entry(&state.db, &id).await?;
+    require_cluster_perm(&user, &entry.cluster_id, "entry.edit")?;
     let f = fetch_file(&state.db, &id, &fid).await?;
     if f.version != entry.current_version {
         return Err(ApiError::conflict("yalnız güncel sürümdeki dosya silinebilir"));

@@ -65,6 +65,42 @@ impl Scope {
     }
 }
 
+// ---------------- RBAC: yetki anahtarları ----------------
+
+/// RBAC yetki kataloğu. Roller bunların bir alt kümesini taşır.
+/// Yeni anahtar eklemek listeyi genişletmek kadar basit; eski anahtarlar
+/// veritabanında kalmışsa geçersiz sayılıp sessizce yok sayılır.
+pub const PERMISSIONS: &[&str] = &[
+    "cluster.view",
+    "cluster.manage",
+    "entry.view",
+    "entry.create",
+    "entry.edit",
+    "entry.delete",
+    "secret.read",
+    // yalnız global geçerli (cluster'a özgü atanmaları anlamsız):
+    "users.manage",
+    "roles.manage",
+    "audit.read",
+];
+
+/// Yetki anahtarı geçerli mi?
+pub fn valid_permission(s: &str) -> bool {
+    PERMISSIONS.contains(&s)
+}
+
+/// listedeki geçersiz anahtarları ayıklar; boş/tekrar da temizlenir.
+pub fn sanitize_permissions(list: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for p in list {
+        let t = p.trim();
+        if valid_permission(t) && !out.iter().any(|x| x == t) {
+            out.push(t.to_string());
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,5 +111,15 @@ mod tests {
         assert_eq!(Role::Admin.allowed_scopes().len(), 3);
         assert_eq!(Role::parse("editor"), Some(Role::Editor));
         assert_eq!(Scope::parse("read"), Some(Scope::Read));
+    }
+
+    #[test]
+    fn permissions() {
+        assert!(valid_permission("cluster.view"));
+        assert!(!valid_permission("cluster.delete"));
+        assert_eq!(
+            sanitize_permissions(&["entry.view".into(), "nope".into(), "entry.view".into()]),
+            vec!["entry.view".to_string()]
+        );
     }
 }

@@ -6,7 +6,7 @@ pub mod security;
 
 pub use content::ContentKind;
 pub use model::*;
-pub use security::{Role, Scope};
+pub use security::{sanitize_permissions, valid_permission, Role, Scope, PERMISSIONS};
 
 /// Yeni kayıt kimliği: `<prefix>_<32 hex>` (uuid v4).
 pub fn new_id(prefix: &str) -> String {

@@ -126,6 +126,49 @@ export interface CreatedToken {
   token: string;
 }
 
+// ---------- RBAC: roller, departmanlar, atamalar ----------
+
+export interface RoleDef {
+  id: string;
+  name: string;
+  description: string;
+  permissions: string[];
+  is_system: boolean;
+  created_at: number;
+}
+
+export interface DepartmentInfo {
+  id: string;
+  name: string;
+  description: string;
+  member_count: number;
+  created_at: number;
+}
+
+export interface GrantInfo {
+  id: number;
+  subject_type: "user" | "department";
+  subject_id: string;
+  subject_name: string;
+  role_id: string;
+  role_name: string;
+  cluster_id?: string | null;
+  cluster_name?: string | null;
+  permissions: string[];
+  created_at: number;
+}
+
+export interface PermsSummary {
+  global: string[];
+  clusters: Record<string, string[]>;
+}
+
+export interface DepartmentMember {
+  id: string;
+  username: string;
+  display_name: string;
+}
+
 // ---------- istemci indirme ----------
 
 

@@ -9,6 +9,7 @@ import EntryEdit from "./pages/EntryEdit";
 import Users from "./pages/Users";
 import Tokens from "./pages/Tokens";
 import Audit from "./pages/Audit";
+import Access from "./pages/Access";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/users" element={<Users />} />
         <Route path="/tokens" element={<Tokens />} />
         <Route path="/audit" element={<Audit />} />
+        <Route path="/access" element={<Access />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -117,6 +117,18 @@ pub async fn create(
     )
     .await;
 
+    // RBAC: users.role değişmez kural — her kullanıcının rolüne karşılık
+    // bir global grant'ı olur (migration aynı şeyi eski kullanıcılara yaptı).
+    let _ = sqlx::query(
+        "INSERT OR IGNORE INTO grants (subject_type, subject_id, role_id, cluster_id, created_at)
+         VALUES ('user', ?, ?, NULL, ?)",
+    )
+    .bind(&uid)
+    .bind(role_to_id(role.as_str()))
+    .bind(now_ms())
+    .execute(&state.db)
+    .await;
+
     let row = sqlx::query_as::<_, UserRow>(&format!(
         "SELECT {USER_COLS} FROM users WHERE id = ?"
     ))
@@ -194,6 +206,23 @@ pub async fn update(
     .execute(&state.db)
     .await?;
 
+    // RBAC: global grant'ı rolle senkron tut.
+    if let Some(r) = req.role.as_deref() {
+        let _ = sqlx::query("DELETE FROM grants WHERE subject_type = 'user' AND subject_id = ? AND cluster_id IS NULL")
+            .bind(&id)
+            .execute(&state.db)
+            .await;
+        let _ = sqlx::query(
+            "INSERT INTO grants (subject_type, subject_id, role_id, cluster_id, created_at)
+             VALUES ('user', ?, ?, NULL, ?)",
+        )
+        .bind(&id)
+        .bind(role_to_id(r))
+        .bind(now_ms())
+        .execute(&state.db)
+        .await;
+    }
+
     audit(
         &state.db,
         Some(user.uid()),
@@ -242,14 +271,27 @@ pub async fn delete_user(
         .bind(&id)
         .execute(&state.db)
         .await?;
+    // grant'ler polymorphic (FK yok) — elle temizle (üyelikler cascade düşer)
+    let _ = sqlx::query("DELETE FROM grants WHERE subject_type = 'user' AND subject_id = ?")
+        .bind(&id)
+        .execute(&state.db)
+        .await;
     audit(&state.db, Some(user.uid()), "user.delete", Some(&id), None, None,
         Some(serde_json::json!({ "username": t.username }))).await;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
+/// users.role → sistem rol id'si (global grant senkronu için).
+fn role_to_id(role: &str) -> &'static str {
+    match role {
+        "admin" => "role_admin",
+        "editor" => "role_editor",
+        _ => "role_viewer",
+    }
+}
+
 /// Sistemde aktif kalan en az bir admin olmalı.
-async fn admin_change_guard(
-    state: &SharedState,
+async fn admin_change_guard(    state: &SharedState,
     id: &str,
     new_role: Option<&str>,
     new_active: Option<bool>,

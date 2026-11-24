@@ -1,5 +1,6 @@
 //! API modüllerini birleştiren router.
 
+pub mod access;
 pub mod audit;
 pub mod clusters;
 pub mod entries;
@@ -25,6 +26,8 @@ pub fn router() -> Router<SharedState> {
         .route("/api/auth/tokens/{id}", delete(auth::delete_token))
         // kullanıcı yönetimi (admin)
         .merge(users::router())
+        // RBAC: roller, departmanlar, atamalar
+        .merge(access::router())
         // cluster / group
         .merge(clusters::router())
         .merge(groups::router())
