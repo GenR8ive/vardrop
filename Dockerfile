@@ -10,6 +10,7 @@ RUN cd apps/admin-web && npm run build
 FROM rust:1-bookworm AS server
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
+COPY config.example.toml config.host.example.toml ./
 COPY crates ./crates
 RUN cargo build --release -p vardrop-server
 
