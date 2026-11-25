@@ -1,6 +1,6 @@
 [package]
 name = "vardrop"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 description = "Vardrop istemcisi — Ctrl+Alt+V ile açılan değişken arama/kopyalama penceresi"
 license = "MIT"

@@ -4,7 +4,7 @@ members = ["crates/vardrop-core", "crates/vardrop-server"]
 exclude = ["apps/client/src-tauri"]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 description = "Self-hosted variable and secret registry"
